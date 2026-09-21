@@ -16,9 +16,9 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Owner     = "zein"
-      Project   = "cloudbatch818"
-      ManagedBy = "terraform"
+      Owner       = "zein"
+      Project     = "cloudbatch818"
+      ManagedBy   = "terraform"
       Environment = var.environment
     }
   }
