@@ -1,0 +1,47 @@
+name: Terraform bootstrap
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  bootstrap-state:
+    name: Create Terraform state bucket
+    runs-on: ubuntu-latest
+    environment: dev
+    outputs:
+      state_bucket: ${{ steps.state.outputs.bucket }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Initialize bootstrap Terraform
+        working-directory: infra/terraform/bootstrap
+        run: terraform init -backend=false
+
+      - name: Create state bucket
+        working-directory: infra/terraform/bootstrap
+        run: terraform apply -auto-approve
+
+      - name: Export state bucket name
+        id: state
+        working-directory: infra/terraform/bootstrap
+        shell: bash
+        run: echo "bucket=$(terraform output -raw state_bucket_name)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish state bucket name
+        run: |
+          echo "Terraform state bucket: ${{ steps.state.outputs.bucket }}"
