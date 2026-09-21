@@ -11,7 +11,7 @@ jobs:
   bootstrap-state:
     name: Create Terraform state bucket
     runs-on: ubuntu-latest
-    environment: dev
+    if: github.ref == 'refs/heads/main'
     outputs:
       state_bucket: ${{ steps.state.outputs.bucket }}
 
