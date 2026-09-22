@@ -43,4 +43,8 @@ jobs:
 
       - name: Plan
         working-directory: infra/terraform/networking
-        run: terraform plan -input=false
+        run: |
+          terraform plan -input=false \
+            -var='vpc_cidr=${{ vars.VPC_CIDR }}' \
+            -var='availability_zones=${{ vars.AVAILABILITY_ZONES }}' \
+            -var='enable_nat_gateway=${{ vars.ENABLE_NAT_GATEWAY }}'
