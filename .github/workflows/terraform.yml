@@ -52,4 +52,4 @@ jobs:
 
       - name: Plan
         working-directory: infra/terraform
-        run: terraform plan -input=false -var="environment=${{ inputs.environment }}" -var="aws_region=${{ vars.AWS_REGION }}" -var="state_bucket=${{ vars.TF_STATE_BUCKET }}" -var="state_region=${{ vars.TF_STATE_REGION }}"
+        run: terraform plan -input=false -var="environment=${{ inputs.environment }}" -var="aws_region=${{ vars.AWS_REGION }}" -var="state_bucket=${{ vars.TF_STATE_BUCKET }}" -var="state_region=${{ vars.TF_STATE_REGION }}" -var="instance_type=${{ vars.INSTANCE_TYPE }}" -var="min_size=${{ vars.MIN_SIZE }}" -var="max_size=${{ vars.MAX_SIZE }}" -var="rds_instance_class=${{ vars.RDS_INSTANCE_CLASS }}"
