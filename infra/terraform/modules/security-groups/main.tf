@@ -4,6 +4,14 @@ resource "aws_security_group" "alb" {
   vpc_id      = var.vpc_id
 
   ingress {
+    description = "HTTP for the initial lab listener"
+    protocol    = "tcp"
+    from_port   = 80
+    to_port     = 80
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
     description = "HTTPS from the internet"
     protocol    = "tcp"
     from_port   = 443

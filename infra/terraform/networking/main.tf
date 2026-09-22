@@ -109,3 +109,27 @@ output "app_subnet_ids" {
 output "database_subnet_ids" {
   value = module.networking.database_subnet_ids
 }
+
+output "test_public_subnet_ids" {
+  value = [for key, subnet in aws_subnet.additional : subnet.id if startswith(key, "test_public-")]
+}
+
+output "test_app_subnet_ids" {
+  value = [for key, subnet in aws_subnet.additional : subnet.id if startswith(key, "test_app-")]
+}
+
+output "test_database_subnet_ids" {
+  value = [for key, subnet in aws_subnet.additional : subnet.id if startswith(key, "test_database-")]
+}
+
+output "prod_public_subnet_ids" {
+  value = [for key, subnet in aws_subnet.additional : subnet.id if startswith(key, "prod_public-")]
+}
+
+output "prod_app_subnet_ids" {
+  value = [for key, subnet in aws_subnet.additional : subnet.id if startswith(key, "prod_app-")]
+}
+
+output "prod_database_subnet_ids" {
+  value = [for key, subnet in aws_subnet.additional : subnet.id if startswith(key, "prod_database-")]
+}

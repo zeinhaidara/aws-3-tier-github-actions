@@ -33,3 +33,23 @@ variable "state_bucket" {
 variable "state_region" {
   type = string
 }
+
+variable "instance_type" {
+  type    = string
+  default = "t3.micro"
+}
+
+variable "min_size" {
+  type    = number
+  default = 1
+}
+
+variable "max_size" {
+  type    = number
+  default = 1
+}
+
+variable "rds_instance_class" {
+  type    = string
+  default = "db.t3.micro"
+}
