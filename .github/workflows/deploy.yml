@@ -1,4 +1,4 @@
-name: Terraform
+name: Deploy application
 
 on:
   workflow_dispatch:
@@ -11,21 +11,23 @@ on:
           - dev
           - test
           - prod
-      image_tag:
-        description: Optional immutable ECR image tag; defaults to the workflow commit.
-        required: false
-        default: ""
-        type: string
 
 permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
 jobs:
-  plan:
-    name: Terraform plan (${{ inputs.environment }})
+  deploy:
+    name: Deploy application (${{ inputs.environment }})
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
+
+    env:
+      IMAGE_TAG: sha-${{ github.sha }}
 
     steps:
       - name: Checkout
@@ -48,16 +50,17 @@ jobs:
             -backend-config="key=${{ inputs.environment }}/terraform.tfstate" \
             -backend-config="region=${{ vars.TF_STATE_REGION }}"
 
-      - name: Format check
-        run: terraform fmt -check -recursive
-
-      - name: Validate
-        working-directory: infra/terraform
-        run: terraform validate
-
-      - name: Plan
+      - name: Apply exact image tag
         working-directory: infra/terraform
         run: |
-          IMAGE_TAG="${{ inputs.image_tag }}"
-          IMAGE_TAG="${IMAGE_TAG:-sha-$GITHUB_SHA}"
-          terraform plan -input=false -var="environment=${{ inputs.environment }}" -var="aws_region=${{ vars.AWS_REGION }}" -var="state_bucket=${{ vars.TF_STATE_BUCKET }}" -var="state_region=${{ vars.TF_STATE_REGION }}" -var="instance_type=${{ vars.INSTANCE_TYPE }}" -var="min_size=${{ vars.MIN_SIZE }}" -var="max_size=${{ vars.MAX_SIZE }}" -var="rds_instance_class=${{ vars.RDS_INSTANCE_CLASS }}" -var="image_tag=$IMAGE_TAG"
+          terraform apply -auto-approve -input=false \
+            -var="environment=${{ inputs.environment }}" \
+            -var="aws_region=${{ vars.AWS_REGION }}" \
+            -var="state_bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -var="state_region=${{ vars.TF_STATE_REGION }}" \
+            -var="instance_type=${{ vars.INSTANCE_TYPE }}" \
+            -var="min_size=${{ vars.MIN_SIZE }}" \
+            -var="max_size=${{ vars.MAX_SIZE }}" \
+            -var="rds_instance_class=${{ vars.RDS_INSTANCE_CLASS }}" \
+            -var="seed_data=${{ inputs.environment == 'dev' }}" \
+            -var="image_tag=$IMAGE_TAG"

@@ -8,9 +8,27 @@ locals {
     Environment = var.environment
   }
 
-  public_subnet_ids   = data.terraform_remote_state.networking.outputs.public_subnet_ids
-  app_subnet_ids      = data.terraform_remote_state.networking.outputs.app_subnet_ids
-  database_subnet_ids = data.terraform_remote_state.networking.outputs.database_subnet_ids
+  subnet_ids = {
+    dev = {
+      public   = data.terraform_remote_state.networking.outputs.dev_public_subnet_ids
+      app      = data.terraform_remote_state.networking.outputs.dev_app_subnet_ids
+      database = data.terraform_remote_state.networking.outputs.dev_database_subnet_ids
+    }
+    test = {
+      public   = data.terraform_remote_state.networking.outputs.test_public_subnet_ids
+      app      = data.terraform_remote_state.networking.outputs.test_app_subnet_ids
+      database = data.terraform_remote_state.networking.outputs.test_database_subnet_ids
+    }
+    prod = {
+      public   = data.terraform_remote_state.networking.outputs.prod_public_subnet_ids
+      app      = data.terraform_remote_state.networking.outputs.prod_app_subnet_ids
+      database = data.terraform_remote_state.networking.outputs.prod_database_subnet_ids
+    }
+  }
+
+  public_subnet_ids   = local.subnet_ids[var.environment].public
+  app_subnet_ids      = local.subnet_ids[var.environment].app
+  database_subnet_ids = local.subnet_ids[var.environment].database
 }
 
 data "terraform_remote_state" "networking" {
@@ -75,6 +93,10 @@ output "name_prefix" {
   value = local.name_prefix
 }
 
+output "ecr_repository_url" {
+  value = data.terraform_remote_state.networking.outputs.ecr_repository_url
+}
+
 data "aws_ssm_parameter" "amazon_linux_2023" {
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 }
@@ -110,6 +132,31 @@ resource "aws_iam_role_policy" "app_database_secret" {
       Action   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
       Resource = aws_db_instance.app.master_user_secret[0].secret_arn
     }]
+  })
+}
+
+resource "aws_iam_role_policy" "app_ecr_pull" {
+  name = "${local.name_prefix}-ecr-pull"
+  role = aws_iam_role.app.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer"
+        ]
+        Resource = data.terraform_remote_state.networking.outputs.ecr_repository_arn
+      }
+    ]
   })
 }
 
@@ -167,27 +214,17 @@ resource "aws_launch_template" "app" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
-    # Amazon Linux includes Python. This deliberately has no package download
-    # because the application tier has no NAT gateway in the project design.
-    mkdir -p /opt/cloudbatch818-app
-    echo 'ok' > /opt/cloudbatch818-app/healthz
-
-    cat >/etc/systemd/system/cloudbatch818-app.service <<'SERVICE'
-    [Unit]
-    Description=Cloudbatch818 dev application placeholder
-    After=network.target
-
-    [Service]
-    WorkingDirectory=/opt/cloudbatch818-app
-    ExecStart=/usr/bin/python3 -m http.server 80 --directory /opt/cloudbatch818-app
-    Restart=always
-
-    [Install]
-    WantedBy=multi-user.target
-    SERVICE
-
-    systemctl daemon-reload
-    systemctl enable --now cloudbatch818-app.service
+    dnf install -y docker
+    systemctl enable --now docker
+    aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin ${data.terraform_remote_state.networking.outputs.ecr_repository_url}
+    docker pull ${data.terraform_remote_state.networking.outputs.ecr_repository_url}:${var.image_tag}
+    docker rm -f cloudbatch818-api || true
+    docker run -d --restart unless-stopped --name cloudbatch818-api \
+      -p 8000:8000 \
+      -e DATABASE_SECRET_ARN=${aws_db_instance.app.master_user_secret[0].secret_arn} \
+      -e DATABASE_HOST=${aws_db_instance.app.address} \
+      -e SEED_DATA=${var.seed_data} \
+      ${data.terraform_remote_state.networking.outputs.ecr_repository_url}:${var.image_tag}
   EOF
   )
 
@@ -206,6 +243,17 @@ resource "aws_autoscaling_group" "app" {
   target_group_arns         = [module.alb.target_group_arn]
   health_check_type         = "EC2"
   health_check_grace_period = 300
+
+  instance_refresh {
+    strategy = "Rolling"
+
+    preferences {
+      min_healthy_percentage = 0
+      instance_warmup        = 300
+    }
+
+    triggers = ["launch_template"]
+  }
 
   launch_template {
     id      = aws_launch_template.app.id
