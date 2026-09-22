@@ -25,3 +25,11 @@ variable "enable_nat_gateway" {
   type        = bool
   default     = false
 }
+
+variable "state_bucket" {
+  type = string
+}
+
+variable "state_region" {
+  type = string
+}
