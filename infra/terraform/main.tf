@@ -99,6 +99,20 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
+resource "aws_iam_role_policy" "app_database_secret" {
+  name = "${local.name_prefix}-database-secret-read"
+  role = aws_iam_role.app.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
+      Resource = aws_db_instance.app.master_user_secret[0].secret_arn
+    }]
+  })
+}
+
 resource "aws_iam_instance_profile" "app" {
   name = "${local.name_prefix}-app-profile"
   role = aws_iam_role.app.name
