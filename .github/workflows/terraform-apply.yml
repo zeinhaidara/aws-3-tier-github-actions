@@ -1,0 +1,53 @@
+name: Terraform apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  apply:
+    name: Terraform apply (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Initialize Terraform backend
+        working-directory: infra/terraform
+        run: |
+          terraform init -reconfigure \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ inputs.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ vars.TF_STATE_REGION }}"
+
+      - name: Apply Terraform
+        working-directory: infra/terraform
+        run: |
+          terraform apply -auto-approve -input=false \
+            -var="environment=${{ inputs.environment }}" \
+            -var="aws_region=${{ vars.AWS_REGION }}" \
+            -var="state_bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -var="state_region=${{ vars.TF_STATE_REGION }}"
