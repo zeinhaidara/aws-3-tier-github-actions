@@ -233,11 +233,6 @@ resource "aws_launch_template" "app" {
       -e DATABASE_HOST=${aws_db_instance.app.address} \
       -e SEED_DATA=${var.seed_data} \
       ${local.image_uri}
-    sleep 10
-    echo "--- cloudbatch818-api container status ---"
-    docker ps -a --filter name=cloudbatch818-api
-    echo "--- cloudbatch818-api container logs ---"
-    docker logs --tail 100 cloudbatch818-api || true
   EOF
   )
 
