@@ -74,12 +74,19 @@ jobs:
   sonarqube:
     name: SonarQube code scan
     runs-on: ubuntu-latest
-    if: ${{ secrets.SONAR_HOST_URL != '' && secrets.SONAR_TOKEN != '' }}
+    env:
+      SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Verify SonarQube configuration
+        run: |
+          test -n "$SONAR_HOST_URL" || { echo "Missing SONAR_HOST_URL secret"; exit 1; }
+          test -n "$SONAR_TOKEN" || { echo "Missing SONAR_TOKEN secret"; exit 1; }
 
       - name: SonarQube scan
         uses: SonarSource/sonarqube-scan-action@v5
@@ -87,5 +94,5 @@ jobs:
           args: >-
             -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
