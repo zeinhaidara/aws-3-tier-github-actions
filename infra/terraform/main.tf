@@ -228,13 +228,27 @@ resource "aws_launch_template" "app" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
+    set -euxo pipefail
+
     dnf install -y docker
     systemctl enable --now docker
+
+    for attempt in $(seq 1 60); do
+      if timeout 2 bash -c "</dev/tcp/${aws_db_instance.app.address}/3306"; then
+        break
+      fi
+      sleep 5
+    done
+
     aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin ${data.terraform_remote_state.networking.outputs.ecr_repository_url}
     docker pull ${local.image_uri}
     docker rm -f cloudbatch818-api || true
     docker run -d --restart unless-stopped --name cloudbatch818-api \
       -p 8000:8000 \
+      --log-driver=awslogs \
+      --log-opt awslogs-region=${var.aws_region} \
+      --log-opt awslogs-group=${aws_cloudwatch_log_group.app.name} \
+      --log-opt awslogs-stream=ec2 \
       -e AWS_REGION=${var.aws_region} \
       -e AWS_DEFAULT_REGION=${var.aws_region} \
       -e DATABASE_SECRET_ARN=${aws_db_instance.app.master_user_secret[0].secret_arn} \
