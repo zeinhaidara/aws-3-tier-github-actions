@@ -39,7 +39,7 @@ jobs:
         working-directory: app/backend
         run: |
           pip install -r requirements-dev.txt
-          pytest -q
+          PYTHONPATH=. pytest -q
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
