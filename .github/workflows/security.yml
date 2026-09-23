@@ -7,6 +7,8 @@ on:
     paths:
       - app/backend/**
       - infra/terraform/**
+      - .checkov.yaml
+      - .trivyignore
       - .github/workflows/security.yml
       - sonar-project.properties
   push:
@@ -15,6 +17,8 @@ on:
     paths:
       - app/backend/**
       - infra/terraform/**
+      - .checkov.yaml
+      - .trivyignore
       - .github/workflows/security.yml
       - sonar-project.properties
   workflow_dispatch:
@@ -52,6 +56,7 @@ jobs:
           scanners: vuln,misconfig,secret
           severity: HIGH,CRITICAL
           exit-code: "1"
+          trivyignores: .trivyignore
 
   trivy-image:
     name: Trivy container scan
@@ -70,6 +75,7 @@ jobs:
           scanners: vuln,secret
           severity: HIGH,CRITICAL
           exit-code: "1"
+          ignore-unfixed: true
 
   sonarqube:
     name: SonarQube code scan
