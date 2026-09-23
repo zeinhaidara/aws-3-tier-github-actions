@@ -56,7 +56,7 @@ variable "rds_instance_class" {
 
 variable "image_tag" {
   type    = string
-  default = "latest"
+  default = ""
 }
 
 variable "seed_data" {

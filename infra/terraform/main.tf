@@ -29,6 +29,7 @@ locals {
   public_subnet_ids   = local.subnet_ids[var.environment].public
   app_subnet_ids      = local.subnet_ids[var.environment].app
   database_subnet_ids = local.subnet_ids[var.environment].database
+  image_uri           = var.image_tag != "" ? "${data.terraform_remote_state.networking.outputs.ecr_repository_url}:${var.image_tag}" : "${data.terraform_remote_state.networking.outputs.ecr_repository_url}@${data.aws_ecr_image.app.image_digest}"
 }
 
 data "terraform_remote_state" "networking" {
@@ -39,6 +40,11 @@ data "terraform_remote_state" "networking" {
     key    = "shared/networking.tfstate"
     region = var.state_region
   }
+}
+
+data "aws_ecr_image" "app" {
+  repository_name = "cloudbatch818-zein-app"
+  most_recent      = true
 }
 
 module "security_groups" {
@@ -217,14 +223,14 @@ resource "aws_launch_template" "app" {
     dnf install -y docker
     systemctl enable --now docker
     aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin ${data.terraform_remote_state.networking.outputs.ecr_repository_url}
-    docker pull ${data.terraform_remote_state.networking.outputs.ecr_repository_url}:${var.image_tag}
+    docker pull ${local.image_uri}
     docker rm -f cloudbatch818-api || true
     docker run -d --restart unless-stopped --name cloudbatch818-api \
       -p 8000:8000 \
       -e DATABASE_SECRET_ARN=${aws_db_instance.app.master_user_secret[0].secret_arn} \
       -e DATABASE_HOST=${aws_db_instance.app.address} \
       -e SEED_DATA=${var.seed_data} \
-      ${data.terraform_remote_state.networking.outputs.ecr_repository_url}:${var.image_tag}
+      ${local.image_uri}
   EOF
   )
 
