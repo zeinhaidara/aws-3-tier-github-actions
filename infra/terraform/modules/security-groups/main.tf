@@ -20,6 +20,7 @@ resource "aws_security_group" "alb" {
   }
 
   egress {
+    description = "ALB outbound traffic"
     protocol    = "-1"
     from_port   = 0
     to_port     = 0
@@ -43,6 +44,7 @@ resource "aws_security_group" "app" {
   }
 
   egress {
+    description = "Application outbound access for ECR, RDS, and updates"
     protocol    = "-1"
     from_port   = 0
     to_port     = 0
@@ -66,6 +68,7 @@ resource "aws_security_group" "database" {
   }
 
   egress {
+    description = "Database response traffic"
     protocol    = "-1"
     from_port   = 0
     to_port     = 0

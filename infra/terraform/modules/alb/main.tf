@@ -1,9 +1,10 @@
 resource "aws_lb" "this" {
-  name               = substr("${var.name_prefix}-alb", 0, 32)
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [var.security_group_id]
-  subnets            = var.public_subnet_ids
+  name                       = substr("${var.name_prefix}-alb", 0, 32)
+  internal                   = false
+  load_balancer_type         = "application"
+  drop_invalid_header_fields = true
+  security_groups            = [var.security_group_id]
+  subnets                    = var.public_subnet_ids
 
   tags = merge(var.common_tags, {
     Name = "${var.name_prefix}-alb"
