@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 import json
 from typing import Annotated
+from urllib.parse import quote_plus
 
 import boto3
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -34,7 +35,8 @@ def resolve_database_url() -> str:
         port = credentials.get("port", settings.database_port)
         database = credentials.get("dbname", "app")
         return (
-            f"mysql+pymysql://{credentials['username']}:{credentials['password']}"
+            f"mysql+pymysql://{quote_plus(credentials['username'])}:"
+            f"{quote_plus(credentials['password'])}"
             f"@{host}:{port}/{database}"
         )
     return settings.database_url
