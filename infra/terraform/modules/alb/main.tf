@@ -1,9 +1,10 @@
 resource "aws_lb" "this" {
-  name               = substr("${var.name_prefix}-alb", 0, 32)
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [var.security_group_id]
-  subnets            = var.public_subnet_ids
+  name                       = substr("${var.name_prefix}-alb", 0, 32)
+  internal                   = false
+  load_balancer_type         = "application"
+  drop_invalid_header_fields = true
+  security_groups            = [var.security_group_id]
+  subnets                    = var.public_subnet_ids
 
   tags = merge(var.common_tags, {
     Name = "${var.name_prefix}-alb"
@@ -71,6 +72,7 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   certificate_arn   = var.acm_certificate_arn
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
 
   default_action {
     type             = "forward"

@@ -1,0 +1,6 @@
+# Intentional lab trade-offs, matching the documented Checkov exceptions.
+AWS-0132  # S3 state bucket uses SSE-S3 instead of a paid customer KMS key.
+AWS-0053  # The internet-facing ALB is intentionally public.
+AWS-0054  # HTTPS is enabled after an ACM certificate ARN is supplied.
+AWS-0164  # Public subnets intentionally host the internet-facing ALB.
+AWS-0104  # Broad egress is retained for ECR, updates, and RDS connectivity.

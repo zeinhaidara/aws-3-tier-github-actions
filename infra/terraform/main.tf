@@ -202,16 +202,23 @@ resource "aws_db_instance" "app" {
   backup_retention_period     = 1
   deletion_protection         = false
   multi_az                    = false
-  apply_immediately           = true
-  auto_minor_version_upgrade  = true
-  copy_tags_to_snapshot       = true
-  tags                        = merge(local.common_tags, { Name = "${local.name_prefix}-mysql" })
+  apply_immediately               = true
+  auto_minor_version_upgrade      = true
+  copy_tags_to_snapshot           = true
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
+  tags                            = merge(local.common_tags, { Name = "${local.name_prefix}-mysql" })
 }
 
 resource "aws_launch_template" "app" {
   name_prefix   = "${local.name_prefix}-app-"
   image_id      = data.aws_ssm_parameter.amazon_linux_2023.value
   instance_type = var.instance_type
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+  }
 
   iam_instance_profile {
     name = aws_iam_instance_profile.app.name

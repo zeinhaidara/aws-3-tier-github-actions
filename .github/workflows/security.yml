@@ -7,6 +7,9 @@ on:
     paths:
       - app/backend/**
       - infra/terraform/**
+      - deploy/ecs/**
+      - .checkov.yaml
+      - .trivyignore
       - .github/workflows/security.yml
       - sonar-project.properties
   push:
@@ -15,6 +18,9 @@ on:
     paths:
       - app/backend/**
       - infra/terraform/**
+      - deploy/ecs/**
+      - .checkov.yaml
+      - .trivyignore
       - .github/workflows/security.yml
       - sonar-project.properties
   workflow_dispatch:
@@ -45,13 +51,28 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Scan repository
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: .
           scanners: vuln,misconfig,secret
           severity: HIGH,CRITICAL
           exit-code: "1"
+          trivyignores: .trivyignore
+
+  checkov-ecs:
+    name: Checkov ECS Terraform scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Scan ECS Terraform
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: deploy/ecs
+          framework: terraform
+          soft_fail: false
 
   trivy-image:
     name: Trivy container scan
@@ -64,28 +85,36 @@ jobs:
         run: docker build -t cloudbatch818-api:security-${{ github.sha }} app/backend
 
       - name: Scan image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: cloudbatch818-api:security-${{ github.sha }}
           scanners: vuln,secret
           severity: HIGH,CRITICAL
           exit-code: "1"
+          ignore-unfixed: true
 
   sonarqube:
     name: SonarQube code scan
     runs-on: ubuntu-latest
-    if: ${{ secrets.SONAR_HOST_URL != '' && secrets.SONAR_TOKEN != '' }}
+    env:
+      SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Verify SonarQube configuration
+        run: |
+          test -n "$SONAR_HOST_URL" || { echo "Missing SONAR_HOST_URL secret"; exit 1; }
+          test -n "$SONAR_TOKEN" || { echo "Missing SONAR_TOKEN secret"; exit 1; }
+
       - name: SonarQube scan
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
         with:
           args: >-
             -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
