@@ -12,9 +12,9 @@ resource "aws_lb" "this" {
 
 resource "aws_lb_target_group" "app" {
   name_prefix = "cbz-"
-  port     = 8000
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
+  port        = 8000
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
 
   lifecycle {
     create_before_destroy = true
