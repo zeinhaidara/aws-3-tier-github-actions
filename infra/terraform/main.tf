@@ -58,11 +58,12 @@ module "security_groups" {
 module "alb" {
   source = "./modules/alb"
 
-  name_prefix       = local.name_prefix
-  vpc_id            = data.terraform_remote_state.networking.outputs.vpc_id
-  public_subnet_ids = local.public_subnet_ids
-  security_group_id = module.security_groups.alb_security_group_id
-  common_tags       = local.common_tags
+  name_prefix         = local.name_prefix
+  vpc_id              = data.terraform_remote_state.networking.outputs.vpc_id
+  public_subnet_ids   = local.public_subnet_ids
+  security_group_id   = module.security_groups.alb_security_group_id
+  acm_certificate_arn = var.acm_certificate_arn
+  common_tags         = local.common_tags
 }
 
 output "security_group_ids" {
@@ -78,7 +79,7 @@ output "load_balancer_dns_name" {
 }
 
 output "application_url" {
-  value = "http://${module.alb.load_balancer_dns_name}"
+  value = "${var.acm_certificate_arn == "" ? "http" : "https"}://${module.alb.load_balancer_dns_name}"
 }
 
 output "database_endpoint" {

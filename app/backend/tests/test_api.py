@@ -12,6 +12,7 @@ def test_health_and_ready():
     with TestClient(app) as client:
         assert client.get("/healthz").status_code == 200
         assert client.get("/readyz").status_code == 200
+        assert client.get("/").status_code == 200
 
 
 def test_seeded_products():

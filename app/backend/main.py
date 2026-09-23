@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 import json
+from pathlib import Path
 from typing import Annotated
 from urllib.parse import quote_plus
 
 import boto3
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import Boolean, Float, String, create_engine, select, text
@@ -142,4 +144,11 @@ def create_product(product: ProductCreate, session: SessionDependency):
     session.commit()
     session.refresh(record)
     return record
+
+
+app.mount(
+    "/",
+    StaticFiles(directory=Path(__file__).parent / "static", html=True),
+    name="frontend",
+)
 

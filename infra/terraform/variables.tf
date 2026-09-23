@@ -63,3 +63,9 @@ variable "seed_data" {
   type    = bool
   default = false
 }
+
+variable "acm_certificate_arn" {
+  description = "ACM certificate ARN for HTTPS. Leave blank to keep HTTP enabled."
+  type        = string
+  default     = ""
+}
