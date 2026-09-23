@@ -44,7 +44,7 @@ data "terraform_remote_state" "networking" {
 
 data "aws_ecr_image" "app" {
   repository_name = "cloudbatch818-zein-app"
-  most_recent      = true
+  most_recent     = true
 }
 
 module "security_groups" {
