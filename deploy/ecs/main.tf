@@ -131,8 +131,8 @@ resource "aws_ecs_task_definition" "app" {
   network_mode             = "awsvpc"
   cpu                      = "256"
   memory                   = "512"
-  execution_role_arn        = aws_iam_role.execution.arn
-  task_role_arn             = aws_iam_role.task.arn
+  execution_role_arn       = aws_iam_role.execution.arn
+  task_role_arn            = aws_iam_role.task.arn
 
   container_definitions = jsonencode([{
     name      = "api"
@@ -180,7 +180,7 @@ resource "aws_ecs_service" "app" {
   load_balancer {
     target_group_arn = aws_lb_target_group.app.arn
     container_name   = "api"
-    container_port    = 8000
+    container_port   = 8000
   }
 
   depends_on = [aws_lb_listener.http]
