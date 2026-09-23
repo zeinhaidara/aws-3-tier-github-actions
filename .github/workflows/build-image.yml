@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   build:
-    name: Build FastAPI image
+    name: Test and build FastAPI image
     runs-on: ubuntu-latest
 
     steps:
@@ -41,46 +41,26 @@ jobs:
           pip install -r requirements-dev.txt
           PYTHONPATH=. pytest -q
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Validate image build
-        uses: docker/build-push-action@v6
-        with:
-          context: app/backend
-          push: false
-          tags: cloudbatch818-api:pr-${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  publish:
-    name: Publish immutable image
-    needs: build
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Configure AWS credentials with OIDC
+        if: github.event_name != 'pull_request'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        if: github.event_name != 'pull_request'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and publish immutable image
+      - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: app/backend
-          push: true
-          tags: ${{ steps.login-ecr.outputs.registry }}/cloudbatch818-zein-app:sha-${{ github.sha }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ github.event_name == 'pull_request' && format('cloudbatch818-api:pr-{0}', github.sha) || format('{0}/cloudbatch818-zein-app:sha-{1}', steps.login-ecr.outputs.registry, github.sha) }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -1,8 +1,16 @@
-name: Terraform networking
+name: Terraform environment
 
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
       operation:
         description: Terraform operation
         required: true
@@ -11,24 +19,37 @@ on:
           - plan
           - apply
           - destroy
+      image_tag:
+        description: Optional immutable ECR tag; blank uses the newest image
+        required: false
+        default: ""
+        type: string
 
 permissions:
   id-token: write
   contents: read
 
 concurrency:
-  group: terraform-networking
+  group: terraform-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
   terraform:
-    name: Networking ${{ inputs.operation }}
+    name: ${{ inputs.environment }} ${{ inputs.operation }}
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    environment: ${{ inputs.environment }}
     env:
-      TF_VAR_vpc_cidr: ${{ vars.VPC_CIDR }}
-      TF_VAR_availability_zones: ${{ vars.AVAILABILITY_ZONES }}
-      TF_VAR_enable_nat_gateway: ${{ vars.ENABLE_NAT_GATEWAY }}
+      TF_VAR_environment: ${{ inputs.environment }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_state_bucket: ${{ vars.TF_STATE_BUCKET }}
+      TF_VAR_state_region: ${{ vars.TF_STATE_REGION }}
+      TF_VAR_instance_type: ${{ vars.INSTANCE_TYPE }}
+      TF_VAR_min_size: ${{ vars.MIN_SIZE }}
+      TF_VAR_max_size: ${{ vars.MAX_SIZE }}
+      TF_VAR_rds_instance_class: ${{ vars.RDS_INSTANCE_CLASS }}
+      TF_VAR_image_tag: ${{ inputs.image_tag }}
+      TF_VAR_seed_data: ${{ inputs.environment == 'dev' }}
 
     steps:
       - name: Checkout
@@ -44,31 +65,31 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Initialize
-        working-directory: infra/terraform/networking
+        working-directory: infra/terraform
         run: |
           terraform init -reconfigure \
             -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
-            -backend-config="key=shared/networking.tfstate" \
+            -backend-config="key=${{ inputs.environment }}/terraform.tfstate" \
             -backend-config="region=${{ vars.TF_STATE_REGION }}"
 
       - name: Check
         run: terraform fmt -check -recursive
 
       - name: Validate
-        working-directory: infra/terraform/networking
+        working-directory: infra/terraform
         run: terraform validate
 
       - name: Plan
         if: inputs.operation == 'plan'
-        working-directory: infra/terraform/networking
+        working-directory: infra/terraform
         run: terraform plan -input=false
 
       - name: Apply
         if: inputs.operation == 'apply'
-        working-directory: infra/terraform/networking
+        working-directory: infra/terraform
         run: terraform apply -auto-approve -input=false
 
       - name: Destroy
         if: inputs.operation == 'destroy'
-        working-directory: infra/terraform/networking
+        working-directory: infra/terraform
         run: terraform destroy -auto-approve -input=false
