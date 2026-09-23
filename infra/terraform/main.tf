@@ -227,6 +227,8 @@ resource "aws_launch_template" "app" {
     docker rm -f cloudbatch818-api || true
     docker run -d --restart unless-stopped --name cloudbatch818-api \
       -p 8000:8000 \
+      -e AWS_REGION=${var.aws_region} \
+      -e AWS_DEFAULT_REGION=${var.aws_region} \
       -e DATABASE_SECRET_ARN=${aws_db_instance.app.master_user_secret[0].secret_arn} \
       -e DATABASE_HOST=${aws_db_instance.app.address} \
       -e SEED_DATA=${var.seed_data} \
@@ -258,7 +260,6 @@ resource "aws_autoscaling_group" "app" {
       instance_warmup        = 300
     }
 
-    triggers = ["launch_template"]
   }
 
   launch_template {
