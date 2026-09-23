@@ -18,3 +18,8 @@ variable "common_tags" {
   type    = map(string)
   default = {}
 }
+
+variable "acm_certificate_arn" {
+  type    = string
+  default = ""
+}

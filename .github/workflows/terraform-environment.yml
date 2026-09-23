@@ -49,6 +49,7 @@ jobs:
       TF_VAR_rds_instance_class: ${{ vars.RDS_INSTANCE_CLASS }}
       TF_VAR_image_tag: ${{ inputs.image_tag }}
       TF_VAR_seed_data: ${{ inputs.environment == 'dev' }}
+      TF_VAR_acm_certificate_arn: ${{ vars.ACM_CERTIFICATE_ARN }}
 
     steps:
       - name: Checkout

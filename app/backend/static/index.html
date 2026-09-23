@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CloudBatch Plans</title>
+    <style>
+      :root { color-scheme: light; font-family: Inter, system-ui, sans-serif; }
+      body { margin: 0; background: #f4f7fb; color: #172033; }
+      header { background: #172033; color: white; padding: 2.5rem max(1.5rem, 8vw); }
+      main { max-width: 960px; margin: 2rem auto; padding: 0 1.5rem; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+      .card, form { background: white; border: 1px solid #dfe5ef; border-radius: 12px; padding: 1.25rem; box-shadow: 0 4px 16px #1720330d; }
+      .price { font-size: 1.6rem; font-weight: 700; color: #315efb; }
+      form { margin-top: 2rem; display: grid; gap: .75rem; max-width: 420px; }
+      input, button { font: inherit; padding: .7rem; border-radius: 8px; border: 1px solid #c8d1df; }
+      button { cursor: pointer; background: #315efb; color: white; border: 0; font-weight: 600; }
+      #message { min-height: 1.5rem; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>CloudBatch Plans</h1>
+      <p>Plans served by FastAPI and stored in Amazon RDS.</p>
+    </header>
+    <main>
+      <h2>Available plans</h2>
+      <section id="products" class="grid" aria-live="polite"></section>
+      <form id="product-form">
+        <h2>Add a plan</h2>
+        <input name="name" placeholder="Plan name" required maxlength="120" />
+        <input name="description" placeholder="Description" maxlength="500" />
+        <input name="price" type="number" min="0" step="0.01" placeholder="Price" required />
+        <button type="submit">Create plan</button>
+        <div id="message"></div>
+      </form>
+    </main>
+    <script>
+      const products = document.querySelector("#products");
+      const message = document.querySelector("#message");
+
+      function render(items) {
+        products.innerHTML = items.map(item => `
+          <article class="card">
+            <h3>${item.name}</h3>
+            <p>${item.description || "No description"}</p>
+            <div class="price">$${Number(item.price).toFixed(2)}</div>
+          </article>
+        `).join("");
+      }
+
+      async function loadProducts() {
+        const response = await fetch("/api/products");
+        if (!response.ok) throw new Error("Unable to load products");
+        render(await response.json());
+      }
+
+      document.querySelector("#product-form").addEventListener("submit", async event => {
+        event.preventDefault();
+        const data = Object.fromEntries(new FormData(event.target));
+        data.price = Number(data.price);
+        const response = await fetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+        message.textContent = response.ok ? "Plan created." : "Could not create plan.";
+        if (response.ok) { event.target.reset(); await loadProducts(); }
+      });
+
+      loadProducts().catch(error => { message.textContent = error.message; });
+    </script>
+  </body>
+</html>
