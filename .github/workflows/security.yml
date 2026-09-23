@@ -7,6 +7,7 @@ on:
     paths:
       - app/backend/**
       - infra/terraform/**
+      - deploy/ecs/**
       - .checkov.yaml
       - .trivyignore
       - .github/workflows/security.yml
@@ -17,6 +18,7 @@ on:
     paths:
       - app/backend/**
       - infra/terraform/**
+      - deploy/ecs/**
       - .checkov.yaml
       - .trivyignore
       - .github/workflows/security.yml
@@ -57,6 +59,20 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
           trivyignores: .trivyignore
+
+  checkov-ecs:
+    name: Checkov ECS Terraform scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Scan ECS Terraform
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: deploy/ecs
+          framework: terraform
+          soft_fail: false
 
   trivy-image:
     name: Trivy container scan
