@@ -37,7 +37,6 @@ jobs:
   terraform:
     name: ${{ inputs.environment }} ${{ inputs.operation }}
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     environment: ${{ inputs.environment }}
     env:
       TF_VAR_environment: ${{ inputs.environment }}
@@ -78,6 +77,12 @@ jobs:
       - name: Validate
         working-directory: infra/terraform
         run: terraform validate
+
+      - name: Require main for mutations
+        if: inputs.operation != 'plan' && github.ref != 'refs/heads/main'
+        run: |
+          echo "${{ inputs.operation }} is allowed only from main."
+          exit 1
 
       - name: Plan
         if: inputs.operation == 'plan'
