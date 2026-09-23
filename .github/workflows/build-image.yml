@@ -38,7 +38,7 @@ jobs:
       - name: Test FastAPI application
         working-directory: app/backend
         run: |
-          pip install -r requirements.txt pytest
+          pip install -r requirements-dev.txt
           pytest -q
 
       - name: Setup Docker Buildx
