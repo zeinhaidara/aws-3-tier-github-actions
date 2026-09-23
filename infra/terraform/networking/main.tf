@@ -94,6 +94,36 @@ resource "aws_route_table_association" "additional_private" {
   route_table_id = module.networking.private_route_table_id
 }
 
+resource "aws_ecr_repository" "app" {
+  name                 = "cloudbatch818-zein-app"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = true
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = merge(local.common_tags, { Name = "cloudbatch818-zein-app" })
+}
+
+resource "aws_ecr_lifecycle_policy" "app" {
+  repository = aws_ecr_repository.app.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Retain the most recent 20 immutable application images."
+      selection = {
+        tagStatus     = "tagged"
+        tagPrefixList = ["sha-"]
+        countType     = "imageCountMoreThan"
+        countNumber   = 20
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
 output "vpc_id" {
   value = module.networking.vpc_id
 }
@@ -108,6 +138,26 @@ output "app_subnet_ids" {
 
 output "database_subnet_ids" {
   value = module.networking.database_subnet_ids
+}
+
+output "dev_public_subnet_ids" {
+  value = module.networking.public_subnet_ids
+}
+
+output "dev_app_subnet_ids" {
+  value = module.networking.app_subnet_ids
+}
+
+output "dev_database_subnet_ids" {
+  value = module.networking.database_subnet_ids
+}
+
+output "ecr_repository_arn" {
+  value = aws_ecr_repository.app.arn
+}
+
+output "ecr_repository_url" {
+  value = aws_ecr_repository.app.repository_url
 }
 
 output "test_public_subnet_ids" {

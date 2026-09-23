@@ -12,7 +12,7 @@ resource "aws_lb" "this" {
 
 resource "aws_lb_target_group" "app" {
   name     = substr("${var.name_prefix}-tg", 0, 32)
-  port     = 80
+  port     = 8000
   protocol = "HTTP"
   vpc_id   = var.vpc_id
 

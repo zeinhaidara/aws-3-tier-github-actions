@@ -11,6 +11,11 @@ on:
           - dev
           - test
           - prod
+      image_tag:
+        description: Optional immutable ECR image tag; defaults to the workflow commit.
+        required: false
+        default: ""
+        type: string
 
 permissions:
   id-token: write
@@ -46,6 +51,8 @@ jobs:
       - name: Apply Terraform
         working-directory: infra/terraform
         run: |
+          IMAGE_TAG="${{ inputs.image_tag }}"
+          IMAGE_TAG="${IMAGE_TAG:-sha-$GITHUB_SHA}"
           terraform apply -auto-approve -input=false \
             -var="environment=${{ inputs.environment }}" \
             -var="aws_region=${{ vars.AWS_REGION }}" \
@@ -54,4 +61,5 @@ jobs:
             -var="instance_type=${{ vars.INSTANCE_TYPE }}" \
             -var="min_size=${{ vars.MIN_SIZE }}" \
             -var="max_size=${{ vars.MAX_SIZE }}" \
-            -var="rds_instance_class=${{ vars.RDS_INSTANCE_CLASS }}"
+            -var="rds_instance_class=${{ vars.RDS_INSTANCE_CLASS }}" \
+            -var="image_tag=$IMAGE_TAG"

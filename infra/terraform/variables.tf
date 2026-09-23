@@ -53,3 +53,13 @@ variable "rds_instance_class" {
   type    = string
   default = "db.t3.micro"
 }
+
+variable "image_tag" {
+  type    = string
+  default = "latest"
+}
+
+variable "seed_data" {
+  type    = bool
+  default = false
+}
