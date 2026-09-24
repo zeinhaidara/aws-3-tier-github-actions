@@ -110,6 +110,12 @@ jobs:
           test -n "$SONAR_HOST_URL" || { echo "Missing SONAR_HOST_URL secret"; exit 1; }
           test -n "$SONAR_TOKEN" || { echo "Missing SONAR_TOKEN secret"; exit 1; }
 
+      - name: Generate Python coverage report
+        working-directory: app/backend
+        run: |
+          python -m pip install -r requirements-dev.txt
+          PYTHONPATH=. pytest --cov=. --cov-report=xml:coverage.xml -q
+
       - name: SonarQube scan
         uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
         with:
