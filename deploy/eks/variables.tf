@@ -9,4 +9,7 @@ variable "environment" {
 }
 variable "state_bucket" { type = string }
 variable "state_region" { type = string }
-variable "image_tag" { type = string, default = "" }
+variable "image_tag" {
+  type    = string
+  default = ""
+}
