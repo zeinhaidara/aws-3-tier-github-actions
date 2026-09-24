@@ -21,3 +21,17 @@ def test_seeded_products():
         assert response.status_code == 200
         assert len(response.json()) >= 2
 
+
+def test_create_and_delete_product():
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/products",
+            json={"name": "Delete me", "description": "temporary", "price": 1.0},
+        )
+        assert created.status_code == 201
+        product_id = created.json()["id"]
+
+        deleted = client.delete(f"/api/products/{product_id}")
+        assert deleted.status_code == 204
+        assert client.delete(f"/api/products/{product_id}").status_code == 404
+

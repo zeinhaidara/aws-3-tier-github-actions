@@ -146,6 +146,16 @@ def create_product(product: ProductCreate, session: SessionDependency):
     return record
 
 
+@app.delete("/api/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_product(product_id: int, session: SessionDependency):
+    record = session.get(Product, product_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product not found")
+
+    session.delete(record)
+    session.commit()
+
+
 app.mount(
     "/",
     StaticFiles(directory=Path(__file__).parent / "static", html=True),
