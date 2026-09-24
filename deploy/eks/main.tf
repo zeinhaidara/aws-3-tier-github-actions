@@ -47,6 +47,7 @@ module "eks" {
 
   cluster_endpoint_public_access           = true
   enable_cluster_creator_admin_permissions = true
+  create_kms_key                           = false
 
   tags = {
     Owner       = "zein"
@@ -65,6 +66,7 @@ module "eks" {
 
   eks_managed_node_groups = {
     app = {
+      iam_role_name  = "${local.name}-node-role"
       instance_types = ["t3.small"]
       min_size       = 1
       max_size       = 1
