@@ -20,6 +20,7 @@ skip-check:
   - CKV_AWS_338     # One-year log retention is excessive for this short-lived lab.
   - CKV_AWS_378     # ALB-to-app traffic is private VPC HTTP after TLS termination.
   - CKV_AWS_382     # Broad egress is required for package, ECR, and database access.
+  - CKV_AWS_341     # EC2 Docker bridge networking requires IMDSv2 hop limit 2.
   - CKV2_AWS_5      # Checkov cannot resolve the module-managed SG attachments.
   - CKV2_AWS_20     # HTTP-to-HTTPS redirect activates when an ACM ARN is supplied.
   - CKV2_AWS_11     # VPC flow logs are deferred to the security-observability phase.
