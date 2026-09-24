@@ -28,6 +28,11 @@ data "aws_eks_cluster_auth" "this" {
 locals {
   name      = "cloudbatch818-zein-${var.environment}-eks"
   image_uri = var.image_tag != "" ? "${data.terraform_remote_state.networking.outputs.ecr_repository_url}:${var.image_tag}" : "${data.terraform_remote_state.networking.outputs.ecr_repository_url}@${data.aws_ecr_image.app.image_digest}"
+  app_subnet_ids = {
+    dev  = data.terraform_remote_state.networking.outputs.dev_app_subnet_ids
+    test = data.terraform_remote_state.networking.outputs.test_app_subnet_ids
+    prod = data.terraform_remote_state.networking.outputs.prod_app_subnet_ids
+  }
 }
 
 module "eks" {
@@ -38,7 +43,7 @@ module "eks" {
   cluster_version = "1.31"
 
   vpc_id     = data.terraform_remote_state.networking.outputs.vpc_id
-  subnet_ids = data.terraform_remote_state.networking.outputs.dev_app_subnet_ids
+  subnet_ids = local.app_subnet_ids[var.environment]
 
   cluster_endpoint_public_access           = true
   enable_cluster_creator_admin_permissions = true
@@ -64,7 +69,7 @@ module "eks" {
       min_size       = 1
       max_size       = 1
       desired_size   = 1
-      subnet_ids     = data.terraform_remote_state.networking.outputs.dev_app_subnet_ids
+      subnet_ids     = local.app_subnet_ids[var.environment]
     }
   }
 }
