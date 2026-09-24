@@ -47,7 +47,7 @@ module "eks" {
 
   cluster_endpoint_public_access           = true
   enable_cluster_creator_admin_permissions = true
-  create_kms_key                            = false
+  create_kms_key                           = false
 
   tags = {
     Owner       = "zein"
