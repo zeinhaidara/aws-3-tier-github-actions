@@ -40,7 +40,7 @@ module "eks" {
   vpc_id     = data.terraform_remote_state.networking.outputs.vpc_id
   subnet_ids = data.terraform_remote_state.networking.outputs.dev_app_subnet_ids
 
-  cluster_endpoint_public_access = true
+  cluster_endpoint_public_access           = true
   enable_cluster_creator_admin_permissions = true
 
   tags = {
@@ -108,7 +108,12 @@ resource "kubernetes_deployment" "app" {
             name  = "SEED_DATA"
             value = "true"
           }
-          readiness_probe { http_get { path = "/healthz", port = 8000 } }
+          readiness_probe {
+            http_get {
+              path = "/healthz"
+              port = 8000
+            }
+          }
         }
       }
     }
