@@ -215,8 +215,8 @@ resource "aws_launch_template" "app" {
   instance_type = var.instance_type
 
   metadata_options {
-    http_endpoint               = "enabled"
-    http_tokens                 = "required"
+    http_endpoint = "enabled"
+    http_tokens   = "required"
     # Docker bridge networking requires two hops to reach IMDSv2.
     http_put_response_hop_limit = 2
   }
