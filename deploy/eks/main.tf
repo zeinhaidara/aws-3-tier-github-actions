@@ -75,8 +75,64 @@ module "eks" {
   }
 }
 
+resource "aws_vpc_security_group_ingress_rule" "database_from_eks" {
+  security_group_id            = data.terraform_remote_state.environment.outputs.security_group_ids.database
+  referenced_security_group_id = module.eks.node_security_group_id
+  description                  = "Allow MySQL from the EKS node group"
+  ip_protocol                  = "tcp"
+  from_port                    = 3306
+  to_port                      = 3306
+}
+
 resource "kubernetes_namespace" "app" {
   metadata { name = "cloudbatch818" }
+
+  depends_on = [module.eks]
+}
+
+resource "aws_iam_role" "app" {
+  name = "${local.name}-app-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Principal = {
+        Federated = module.eks.oidc_provider_arn
+      }
+      Condition = {
+        StringEquals = {
+          "${replace(module.eks.cluster_oidc_issuer_url, "https://", "")}:aud" = "sts.amazonaws.com"
+          "${replace(module.eks.cluster_oidc_issuer_url, "https://", "")}:sub" = "system:serviceaccount:cloudbatch818:cloudbatch818-api"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "app_secret" {
+  name = "${local.name}-secret-read"
+  role = aws_iam_role.app.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
+      Resource = data.terraform_remote_state.environment.outputs.database_master_secret_arn
+    }]
+  })
+}
+
+resource "kubernetes_service_account" "app" {
+  metadata {
+    name      = "cloudbatch818-api"
+    namespace = kubernetes_namespace.app.metadata[0].name
+    annotations = {
+      "eks.amazonaws.com/role-arn" = aws_iam_role.app.arn
+    }
+  }
 }
 
 resource "kubernetes_deployment" "app" {
@@ -90,6 +146,8 @@ resource "kubernetes_deployment" "app" {
     template {
       metadata { labels = { app = "cloudbatch818-api" } }
       spec {
+        service_account_name = kubernetes_service_account.app.metadata[0].name
+
         container {
           name  = "api"
           image = local.image_uri
