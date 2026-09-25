@@ -1,0 +1,67 @@
+name: Test - EC2 Load and Scaling
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: dev
+        type: choice
+        options: [dev]
+      url:
+        description: HTTPS URL to test, for example https://ec2-dev.example.com/healthz
+        required: true
+        type: string
+      duration_seconds:
+        description: Test duration in seconds
+        required: false
+        default: "300"
+        type: string
+      concurrency:
+        description: Concurrent clients
+        required: false
+        default: "20"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  load-test:
+    name: Load test public EC2 ALB
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install load tester
+        run: sudo apt-get update && sudo apt-get install -y apache2-utils
+
+      - name: Show ASG capacity before test
+        run: |
+          aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names "cloudbatch818-zein-${{ inputs.environment }}-app-asg" \
+            --query 'AutoScalingGroups[0].{Min:MinSize,Desired:DesiredCapacity,Max:MaxSize,Instances:length(Instances)}'
+
+      - name: Run load test
+        run: |
+          set -euo pipefail
+          ab -t "${{ inputs.duration_seconds }}" -c "${{ inputs.concurrency }}" -k "${{ inputs.url }}"
+
+      - name: Show scaling result
+        if: always()
+        run: |
+          aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names "cloudbatch818-zein-${{ inputs.environment }}-app-asg" \
+            --query 'AutoScalingGroups[0].{Min:MinSize,Desired:DesiredCapacity,Max:MaxSize,Instances:length(Instances)}'
+          aws autoscaling describe-scaling-activities \
+            --auto-scaling-group-name "cloudbatch818-zein-${{ inputs.environment }}-app-asg" \
+            --max-items 5 \
+            --query 'Activities[].{Status:StatusCode,Cause:Cause,Start:StartTime}'

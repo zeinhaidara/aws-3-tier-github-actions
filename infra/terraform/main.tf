@@ -29,7 +29,7 @@ locals {
   public_subnet_ids   = local.subnet_ids[var.environment].public
   app_subnet_ids      = local.subnet_ids[var.environment].app
   database_subnet_ids = local.subnet_ids[var.environment].database
-  image_uri           = var.image_tag != "" ? "${data.terraform_remote_state.networking.outputs.ecr_repository_url}:${var.image_tag}" : "${data.terraform_remote_state.networking.outputs.ecr_repository_url}@${data.aws_ecr_image.app.image_digest}"
+  image_uri           = "${data.terraform_remote_state.networking.outputs.ecr_repository_url}:${var.image_tag}"
 }
 
 data "terraform_remote_state" "networking" {
@@ -40,11 +40,6 @@ data "terraform_remote_state" "networking" {
     key    = "shared/networking.tfstate"
     region = var.state_region
   }
-}
-
-data "aws_ecr_image" "app" {
-  repository_name = "cloudbatch818-zein-app"
-  most_recent     = true
 }
 
 module "security_groups" {
@@ -63,6 +58,8 @@ module "alb" {
   public_subnet_ids   = local.public_subnet_ids
   security_group_id   = module.security_groups.alb_security_group_id
   acm_certificate_arn = var.acm_certificate_arn
+  domain_name         = var.domain_name
+  hosted_zone_name    = var.hosted_zone_name
   common_tags         = local.common_tags
 }
 
@@ -79,7 +76,11 @@ output "load_balancer_dns_name" {
 }
 
 output "application_url" {
-  value = "${var.acm_certificate_arn == "" ? "http" : "https"}://${module.alb.load_balancer_dns_name}"
+  value = module.alb.application_url
+}
+
+output "acm_certificate_arn" {
+  value = module.alb.certificate_arn
 }
 
 output "database_endpoint" {
@@ -272,7 +273,7 @@ resource "aws_autoscaling_group" "app" {
   desired_capacity          = var.min_size
   vpc_zone_identifier       = local.app_subnet_ids
   target_group_arns         = [module.alb.target_group_arn]
-  health_check_type         = "EC2"
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   instance_refresh {
@@ -295,6 +296,55 @@ resource "aws_autoscaling_group" "app" {
     value               = "${local.name_prefix}-app"
     propagate_at_launch = true
   }
+}
+
+resource "aws_autoscaling_policy" "app_cpu_target" {
+  name                   = "${local.name_prefix}-cpu-target"
+  autoscaling_group_name = aws_autoscaling_group.app.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+    target_value = 60
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
+  alarm_name          = "${local.name_prefix}-alb-5xx"
+  alarm_description   = "ALB target or load balancer 5xx responses."
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "HTTPCode_Target_5XX_Count"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = 5
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  dimensions = {
+    LoadBalancer = module.alb.load_balancer_arn_suffix
+    TargetGroup  = module.alb.target_group_arn_suffix
+  }
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "alb_latency" {
+  alarm_name          = "${local.name_prefix}-alb-latency"
+  alarm_description   = "High ALB target response time."
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "TargetResponseTime"
+  extended_statistic  = "p95"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = 1
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  dimensions = {
+    LoadBalancer = module.alb.load_balancer_arn_suffix
+    TargetGroup  = module.alb.target_group_arn_suffix
+  }
+  tags = local.common_tags
 }
 
 resource "aws_cloudwatch_metric_alarm" "app_cpu_high" {

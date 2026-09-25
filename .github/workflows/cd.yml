@@ -1,0 +1,158 @@
+name: CD - Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Terraform target
+        required: true
+        type: choice
+        options:
+          - networking
+          - ec2
+          - ecs
+      environment:
+        description: Target environment; ignored for networking
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+      operation:
+        description: Terraform operation
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+      image_tag:
+        description: Optional immutable ECR tag for EC2/ECS
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: cd-${{ inputs.target }}-${{ inputs.target == 'networking' && 'shared' || inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    name: ${{ inputs.target }} ${{ inputs.environment }} ${{ inputs.operation }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ inputs.environment }}
+    env:
+      TF_VAR_environment: ${{ inputs.environment }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_state_bucket: ${{ vars.TF_STATE_BUCKET }}
+      TF_VAR_state_region: ${{ vars.TF_STATE_REGION }}
+      TF_VAR_vpc_cidr: ${{ vars.VPC_CIDR }}
+      TF_VAR_availability_zones: ${{ vars.AVAILABILITY_ZONES }}
+      TF_VAR_enable_nat_gateway: ${{ vars.ENABLE_NAT_GATEWAY }}
+      TF_VAR_instance_type: ${{ vars.INSTANCE_TYPE }}
+      TF_VAR_min_size: ${{ vars.MIN_SIZE }}
+      TF_VAR_max_size: ${{ vars.MAX_SIZE }}
+      TF_VAR_rds_instance_class: ${{ vars.RDS_INSTANCE_CLASS }}
+      TF_VAR_image_tag: ${{ inputs.image_tag != '' && inputs.image_tag || 'destroy-only' }}
+      TF_VAR_seed_data: ${{ inputs.environment == 'dev' }}
+      TF_VAR_acm_certificate_arn: ${{ vars.ACM_CERTIFICATE_ARN }}
+      TF_VAR_domain_name: ${{ inputs.target == 'ec2' && vars.EC2_DOMAIN_NAME || inputs.target == 'ecs' && vars.ECS_DOMAIN_NAME || '' }}
+      TF_VAR_hosted_zone_name: ${{ vars.HOSTED_ZONE_NAME }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Resolve Terraform target
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.target }}" in
+            networking)
+              echo "directory=infra/terraform/networking" >> "$GITHUB_OUTPUT"
+              echo "state_key=shared/networking.tfstate" >> "$GITHUB_OUTPUT"
+              ;;
+            ec2)
+              echo "directory=infra/terraform" >> "$GITHUB_OUTPUT"
+              echo "state_key=${{ inputs.environment }}/terraform.tfstate" >> "$GITHUB_OUTPUT"
+              ;;
+            ecs)
+              echo "directory=deploy/ecs" >> "$GITHUB_OUTPUT"
+              echo "state_key=ecs/${{ inputs.environment }}/terraform.tfstate" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unsupported target" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Initialize Terraform
+        working-directory: ${{ steps.target.outputs.directory }}
+        run: terraform init -reconfigure -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" -backend-config="key=${{ steps.target.outputs.state_key }}" -backend-config="region=${{ vars.TF_STATE_REGION }}"
+
+      - name: Format and validate
+        working-directory: ${{ steps.target.outputs.directory }}
+        run: |
+          terraform fmt -check -recursive
+          terraform validate
+
+      - name: Require main for mutations
+        if: inputs.operation != 'plan' && github.ref != 'refs/heads/main'
+        run: |
+          echo "${{ inputs.operation }} is allowed only from main."
+          exit 1
+
+      - name: Require immutable application image
+        if: inputs.target != 'networking' && inputs.operation != 'destroy'
+        shell: bash
+        run: |
+          case "${{ inputs.image_tag }}" in
+            sha-*) ;;
+            *) echo "EC2 and ECS plan/apply require an immutable sha-<commit> image tag." >&2; exit 1 ;;
+          esac
+
+      - name: Plan changes
+        if: inputs.operation == 'plan' || inputs.operation == 'apply'
+        working-directory: ${{ steps.target.outputs.directory }}
+        run: terraform plan -input=false -lock-timeout=5m -out=tfplan
+
+      - name: Plan destruction
+        if: inputs.operation == 'destroy'
+        working-directory: ${{ steps.target.outputs.directory }}
+        run: terraform plan -destroy -input=false -lock-timeout=5m -out=tfplan
+
+      - name: Apply approved plan
+        if: inputs.operation == 'apply' || inputs.operation == 'destroy'
+        working-directory: ${{ steps.target.outputs.directory }}
+        run: terraform apply -auto-approve -input=false tfplan
+
+      - name: Smoke test EC2
+        if: inputs.operation == 'apply' && inputs.target == 'ec2' && vars.EC2_DOMAIN_NAME != ''
+        run: |
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --max-time 10 "https://${{ vars.EC2_DOMAIN_NAME }}/healthz"; then exit 0; fi
+            sleep 15
+          done
+          exit 1
+
+      - name: Smoke test ECS
+        if: inputs.operation == 'apply' && inputs.target == 'ecs' && vars.ECS_DOMAIN_NAME != ''
+        run: |
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --max-time 10 "https://${{ vars.ECS_DOMAIN_NAME }}/healthz"; then exit 0; fi
+            sleep 15
+          done
+          exit 1

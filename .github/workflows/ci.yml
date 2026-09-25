@@ -1,0 +1,163 @@
+name: CI - Quality and Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  application:
+    name: Application tests and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: app/backend/requirements-dev.txt
+      - name: Install dependencies
+        working-directory: app/backend
+        run: pip install -r requirements-dev.txt ruff
+      - name: Lint
+        working-directory: app/backend
+        run: ruff check .
+      - name: Test with coverage
+        working-directory: app/backend
+        run: PYTHONPATH=. pytest --cov=. --cov-report=xml:coverage.xml -q
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage
+          path: app/backend/coverage.xml
+          if-no-files-found: error
+
+  terraform:
+    name: Terraform format and validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+      - name: Validate configurations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for dir in infra/terraform/bootstrap infra/terraform/networking infra/terraform deploy/ecs; do
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+          done
+
+  checkov:
+    name: Checkov IaC scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan shared and EC2 infrastructure
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/terraform
+          framework: terraform
+          soft_fail: false
+      - name: Scan ECS infrastructure
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: deploy/ecs
+          framework: terraform
+          soft_fail: false
+
+  trivy-filesystem:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig,secret
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          trivyignores: .trivyignore
+
+  image:
+    name: Build, test, and scan image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t cloudbatch818-api:ci-${{ github.sha }} app/backend
+      - name: Verify container health endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --rm --name cloudbatch818-api -p 8000:8000 cloudbatch818-api:ci-${{ github.sha }}
+          trap 'docker logs cloudbatch818-api; docker stop cloudbatch818-api' EXIT
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8000/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: cloudbatch818-api:ci-${{ github.sha }}
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: cloudbatch818-api:ci-${{ github.sha }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-sbom
+          path: sbom.spdx.json
+          if-no-files-found: error
+      - name: Export tested image
+        run: docker save --output application-image.tar cloudbatch818-api:ci-${{ github.sha }}
+      - name: Upload tested image
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-image-${{ github.sha }}
+          path: application-image.tar
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+  sonarqube:
+    name: SonarQube analysis
+    runs-on: ubuntu-latest
+    needs: application
+    env:
+      SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: python-coverage
+          path: app/backend
+      - name: Run SonarQube scan
+        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
+        with:
+          args: >-
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+        env:
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
