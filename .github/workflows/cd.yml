@@ -27,11 +27,6 @@ on:
           - plan
           - apply
           - destroy
-      image_tag:
-        description: Optional immutable ECR tag for EC2/ECS
-        required: false
-        default: ""
-        type: string
 
 permissions:
   id-token: write
@@ -59,7 +54,7 @@ jobs:
       TF_VAR_min_size: ${{ vars.MIN_SIZE }}
       TF_VAR_max_size: ${{ vars.MAX_SIZE }}
       TF_VAR_rds_instance_class: ${{ vars.RDS_INSTANCE_CLASS }}
-      TF_VAR_image_tag: ${{ inputs.image_tag != '' && inputs.image_tag || 'destroy-only' }}
+      TF_VAR_image_tag: destroy-only
       TF_VAR_seed_data: ${{ inputs.environment == 'dev' }}
       TF_VAR_acm_certificate_arn: ${{ vars.ACM_CERTIFICATE_ARN }}
       TF_VAR_domain_name: ${{ inputs.target == 'ec2' && vars.EC2_DOMAIN_NAME || inputs.target == 'ecs' && vars.ECS_DOMAIN_NAME || '' }}
@@ -72,6 +67,24 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Resolve latest published image
+        if: inputs.target != 'networking' && inputs.operation != 'destroy'
+        shell: bash
+        env:
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY_NAME || 'cloudbatch818-zein-app' }}
+        run: |
+          set -euo pipefail
+          IMAGE_TAG="$(aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --query 'reverse(sort_by(imageDetails,& imagePushedAt))[].imageTags[]' \
+            --output text | tr '\t' '\n' | awk '/^sha-/{print; exit}')"
+          if [[ -z "$IMAGE_TAG" || "$IMAGE_TAG" == "None" ]]; then
+            echo "No published immutable sha-* image was found in $ECR_REPOSITORY." >&2
+            exit 1
+          fi
+          echo "TF_VAR_image_tag=$IMAGE_TAG" >> "$GITHUB_ENV"
+          echo "Deploying immutable image: $ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: hashicorp/setup-terraform@v3
 
@@ -114,15 +127,6 @@ jobs:
         run: |
           echo "${{ inputs.operation }} is allowed only from main."
           exit 1
-
-      - name: Require immutable application image
-        if: inputs.target != 'networking' && inputs.operation != 'destroy'
-        shell: bash
-        run: |
-          case "${{ inputs.image_tag }}" in
-            sha-*) ;;
-            *) echo "EC2 and ECS plan/apply require an immutable sha-<commit> image tag." >&2; exit 1 ;;
-          esac
 
       - name: Plan changes
         if: inputs.operation == 'plan' || inputs.operation == 'apply'

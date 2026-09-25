@@ -46,7 +46,8 @@ jobs:
       - name: Publish tested image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY_NAME || 'cloudbatch818-zein-app' }}
           COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          docker tag "cloudbatch818-api:ci-${COMMIT_SHA}" "${REGISTRY}/cloudbatch818-zein-app:sha-${COMMIT_SHA}"
-          docker push "${REGISTRY}/cloudbatch818-zein-app:sha-${COMMIT_SHA}"
+          docker tag "cloudbatch818-api:ci-${COMMIT_SHA}" "${REGISTRY}/${ECR_REPOSITORY}:sha-${COMMIT_SHA}"
+          docker push "${REGISTRY}/${ECR_REPOSITORY}:sha-${COMMIT_SHA}"

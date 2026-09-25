@@ -32,12 +32,12 @@ If the domain is registered outside Route 53, update its nameservers to the Rout
 
 1. Run `Infrastructure - Bootstrap State`.
 2. Run `CD - Infrastructure` with target `networking` and operation `apply`.
-3. Copy the published `sha-<commit>` image tag from ECR.
-4. Run `CD - Infrastructure` with target `ec2`, environment `dev`, that image tag, and operation `apply`.
-5. Run `CD - Infrastructure` with target `ecs`, environment `dev`, that image tag, and operation `apply`.
+3. Wait for `Publish - Application Image` to finish successfully on `main`.
+4. Run `CD - Infrastructure` with target `ec2`, environment `dev`, and operation `apply`.
+5. Run `CD - Infrastructure` with target `ecs`, environment `dev`, and operation `apply`.
 6. Test both HTTPS URLs and `/healthz`.
 
-Use immutable ECR image tags for repeatable deployments.
+CD automatically resolves the newest published immutable `sha-<commit>` image in ECR. Deploy from `main` after its image-publish workflow completes. Set `ECR_REPOSITORY_NAME` only if your ECR repository differs from the default.
 
 ## CI/CD stages
 
