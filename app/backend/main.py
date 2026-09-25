@@ -5,9 +5,9 @@ from typing import Annotated
 from urllib.parse import quote_plus
 
 import boto3
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import Boolean, Float, String, create_engine, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
@@ -44,12 +44,6 @@ def resolve_database_url() -> str:
     return settings.database_url
 
 
-database_url = resolve_database_url()
-connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-engine = create_engine(database_url, connect_args=connect_args, pool_pre_ping=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-
-
 class Base(DeclarativeBase):
     pass
 
@@ -65,9 +59,11 @@ class Product(Base):
 
 
 class ProductCreate(BaseModel):
-    name: str
-    description: str = ""
-    price: float
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=500)
+    price: float = Field(ge=0, le=1_000_000)
     active: bool = True
 
 
@@ -91,20 +87,28 @@ def seed_products(session: Session) -> None:
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(application: FastAPI):
+    database_url = resolve_database_url()
+    connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
+    engine = create_engine(database_url, connect_args=connect_args, pool_pre_ping=True)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    application.state.session_factory = session_factory
     Base.metadata.create_all(engine)
     if settings.seed_data:
-        with SessionLocal() as session:
+        with session_factory() as session:
             seed_products(session)
-    yield
-    engine.dispose()
+    try:
+        yield
+    finally:
+        engine.dispose()
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 
 
-def get_session():
-    with SessionLocal() as session:
+def get_session(request: Request):
+    with request.app.state.session_factory() as session:
         yield session
 
 

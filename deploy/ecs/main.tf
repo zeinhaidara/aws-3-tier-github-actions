@@ -1,6 +1,16 @@
 locals {
   name_prefix = "cloudbatch818-zein-${var.environment}-ecs"
-  image_uri   = var.image_tag != "" ? "${data.terraform_remote_state.networking.outputs.ecr_repository_url}:${var.image_tag}" : "${data.terraform_remote_state.networking.outputs.ecr_repository_url}@${data.aws_ecr_image.app.image_digest}"
+  image_uri   = "${data.terraform_remote_state.networking.outputs.ecr_repository_url}:${var.image_tag}"
+  public_subnet_ids = {
+    dev  = data.terraform_remote_state.networking.outputs.dev_public_subnet_ids
+    test = data.terraform_remote_state.networking.outputs.test_public_subnet_ids
+    prod = data.terraform_remote_state.networking.outputs.prod_public_subnet_ids
+  }
+  app_subnet_ids = {
+    dev  = data.terraform_remote_state.networking.outputs.dev_app_subnet_ids
+    test = data.terraform_remote_state.networking.outputs.test_app_subnet_ids
+    prod = data.terraform_remote_state.networking.outputs.prod_app_subnet_ids
+  }
 }
 
 data "terraform_remote_state" "networking" {
@@ -21,11 +31,6 @@ data "terraform_remote_state" "environment" {
     key    = "${var.environment}/terraform.tfstate"
     region = var.state_region
   }
-}
-
-data "aws_ecr_image" "app" {
-  repository_name = "cloudbatch818-zein-app"
-  most_recent     = true
 }
 
 resource "aws_cloudwatch_log_group" "app" {
@@ -87,42 +92,17 @@ resource "aws_iam_role_policy" "task_secret" {
   })
 }
 
-resource "aws_lb" "app" {
-  name                       = substr(local.name_prefix, 0, 32)
-  internal                   = false
-  load_balancer_type         = "application"
-  drop_invalid_header_fields = true
-  security_groups            = [data.terraform_remote_state.environment.outputs.security_group_ids.alb]
-  subnets                    = data.terraform_remote_state.networking.outputs.dev_public_subnet_ids
-}
+module "alb" {
+  source = "../../infra/terraform/modules/alb"
 
-resource "aws_lb_target_group" "app" {
-  name_prefix = "ecs-"
-  port        = 8000
-  protocol    = "HTTP"
-  target_type = "ip"
-  vpc_id      = data.terraform_remote_state.networking.outputs.vpc_id
-
-  health_check {
-    path                = "/healthz"
-    protocol            = "HTTP"
-    matcher             = "200"
-    healthy_threshold   = 2
-    unhealthy_threshold = 3
-    interval            = 30
-    timeout             = 5
-  }
-}
-
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.app.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
+  name_prefix       = local.name_prefix
+  vpc_id            = data.terraform_remote_state.networking.outputs.vpc_id
+  public_subnet_ids = local.public_subnet_ids[var.environment]
+  security_group_id = data.terraform_remote_state.environment.outputs.security_group_ids.alb
+  domain_name       = var.domain_name
+  hosted_zone_name  = var.hosted_zone_name
+  target_type       = "ip"
+  target_port       = 8000
 }
 
 resource "aws_ecs_task_definition" "app" {
@@ -144,6 +124,14 @@ resource "aws_ecs_task_definition" "app" {
       hostPort      = 8000
       protocol      = "tcp"
     }]
+
+    healthCheck = {
+      command     = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=2)\" || exit 1"]
+      interval    = 30
+      timeout     = 5
+      retries     = 3
+      startPeriod = 30
+    }
 
     environment = [
       { name = "AWS_REGION", value = var.aws_region },
@@ -171,17 +159,59 @@ resource "aws_ecs_service" "app" {
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
 
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+
   network_configuration {
-    subnets          = data.terraform_remote_state.networking.outputs.dev_app_subnet_ids
+    subnets          = local.app_subnet_ids[var.environment]
     security_groups  = [data.terraform_remote_state.environment.outputs.security_group_ids.app]
     assign_public_ip = false
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.app.arn
+    target_group_arn = module.alb.target_group_arn
     container_name   = "api"
     container_port   = 8000
   }
 
-  depends_on = [aws_lb_listener.http]
+  depends_on = [module.alb]
+}
+
+resource "aws_cloudwatch_metric_alarm" "service_cpu" {
+  alarm_name          = "${local.name_prefix}-cpu-high"
+  alarm_description   = "High average ECS service CPU utilization."
+  namespace           = "AWS/ECS"
+  metric_name         = "CPUUtilization"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = 80
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  dimensions = {
+    ClusterName = aws_ecs_cluster.app.name
+    ServiceName = aws_ecs_service.app.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "service_running_tasks" {
+  alarm_name          = "${local.name_prefix}-running-tasks-low"
+  alarm_description   = "ECS service has fewer running tasks than desired."
+  namespace           = "ECS/ContainerInsights"
+  metric_name         = "RunningTaskCount"
+  statistic           = "Minimum"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = var.desired_count
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "breaching"
+  dimensions = {
+    ClusterName = aws_ecs_cluster.app.name
+    ServiceName = aws_ecs_service.app.name
+  }
 }

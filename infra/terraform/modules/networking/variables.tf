@@ -25,7 +25,7 @@ variable "database_subnet_cidrs" {
 
 variable "enable_nat_gateway" {
   type    = bool
-  default = false
+  default = true
 }
 
 variable "common_tags" {

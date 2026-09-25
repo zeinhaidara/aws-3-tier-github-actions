@@ -1,3 +1,47 @@
+data "aws_route53_zone" "this" {
+  count        = var.domain_name == "" ? 0 : 1
+  name         = var.hosted_zone_name
+  private_zone = false
+}
+
+resource "aws_acm_certificate" "this" {
+  count             = var.domain_name == "" || var.acm_certificate_arn != "" ? 0 : 1
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = var.common_tags
+}
+
+resource "aws_route53_record" "certificate_validation" {
+  for_each = var.domain_name == "" || var.acm_certificate_arn != "" ? {} : {
+    for option in aws_acm_certificate.this[0].domain_validation_options : option.domain_name => {
+      name   = option.resource_record_name
+      record = option.resource_record_value
+      type   = option.resource_record_type
+    }
+  }
+
+  zone_id = data.aws_route53_zone.this[0].zone_id
+  name    = each.value.name
+  type    = each.value.type
+  ttl     = 60
+  records = [each.value.record]
+}
+
+resource "aws_acm_certificate_validation" "this" {
+  count                   = var.domain_name == "" || var.acm_certificate_arn != "" ? 0 : 1
+  certificate_arn         = aws_acm_certificate.this[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.certificate_validation : record.fqdn]
+}
+
+locals {
+  certificate_arn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : try(aws_acm_certificate_validation.this[0].certificate_arn, "")
+}
+
 resource "aws_lb" "this" {
   name                       = substr("${var.name_prefix}-alb", 0, 32)
   internal                   = false
@@ -13,8 +57,9 @@ resource "aws_lb" "this" {
 
 resource "aws_lb_target_group" "app" {
   name_prefix = "cbz-"
-  port        = 8000
+  port        = var.target_port
   protocol    = "HTTP"
+  target_type = var.target_type
   vpc_id      = var.vpc_id
 
   lifecycle {
@@ -23,7 +68,7 @@ resource "aws_lb_target_group" "app" {
 
   health_check {
     enabled             = true
-    path                = "/healthz"
+    path                = var.health_check_path
     protocol            = "HTTP"
     matcher             = "200"
     interval            = 30
@@ -43,7 +88,7 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   dynamic "default_action" {
-    for_each = var.acm_certificate_arn == "" ? [1] : []
+    for_each = local.certificate_arn == "" ? [1] : []
 
     content {
       type             = "forward"
@@ -52,7 +97,7 @@ resource "aws_lb_listener" "http" {
   }
 
   dynamic "default_action" {
-    for_each = var.acm_certificate_arn != "" ? [1] : []
+    for_each = local.certificate_arn != "" ? [1] : []
 
     content {
       type = "redirect"
@@ -67,15 +112,28 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_lb_listener" "https" {
-  count             = var.acm_certificate_arn == "" ? 0 : 1
+  count             = local.certificate_arn == "" ? 0 : 1
   load_balancer_arn = aws_lb.this.arn
   port              = 443
   protocol          = "HTTPS"
-  certificate_arn   = var.acm_certificate_arn
+  certificate_arn   = local.certificate_arn
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
 
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
+resource "aws_route53_record" "alias" {
+  count   = var.domain_name == "" ? 0 : 1
+  zone_id = data.aws_route53_zone.this[0].zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.this.dns_name
+    zone_id                = aws_lb.this.zone_id
+    evaluate_target_health = true
   }
 }

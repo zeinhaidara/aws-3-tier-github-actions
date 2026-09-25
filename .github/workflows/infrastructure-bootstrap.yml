@@ -1,4 +1,4 @@
-name: Terraform bootstrap
+name: Infrastructure - Bootstrap State
 
 on:
   workflow_dispatch:

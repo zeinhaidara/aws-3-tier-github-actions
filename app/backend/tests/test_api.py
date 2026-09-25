@@ -35,3 +35,9 @@ def test_create_and_delete_product():
         assert deleted.status_code == 204
         assert client.delete(f"/api/products/{product_id}").status_code == 404
 
+
+def test_product_validation():
+    with TestClient(app) as client:
+        assert client.post("/api/products", json={"name": "", "price": 1}).status_code == 422
+        assert client.post("/api/products", json={"name": "Invalid", "price": -1}).status_code == 422
+

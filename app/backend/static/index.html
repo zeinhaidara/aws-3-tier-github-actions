@@ -41,14 +41,30 @@
       const message = document.querySelector("#message");
 
       function render(items) {
-        products.innerHTML = items.map(item => `
-          <article class="card">
-            <h3>${item.name}</h3>
-            <p>${item.description || "No description"}</p>
-            <div class="price">$${Number(item.price).toFixed(2)}</div>
-            <button class="delete" type="button" data-id="${item.id}">Delete</button>
-          </article>
-        `).join("");
+        const cards = items.map(item => {
+          const card = document.createElement("article");
+          card.className = "card";
+
+          const name = document.createElement("h3");
+          name.textContent = item.name;
+
+          const description = document.createElement("p");
+          description.textContent = item.description || "No description";
+
+          const price = document.createElement("div");
+          price.className = "price";
+          price.textContent = `$${Number(item.price).toFixed(2)}`;
+
+          const deleteButton = document.createElement("button");
+          deleteButton.className = "delete";
+          deleteButton.type = "button";
+          deleteButton.dataset.id = String(item.id);
+          deleteButton.textContent = "Delete";
+
+          card.append(name, description, price, deleteButton);
+          return card;
+        });
+        products.replaceChildren(...cards);
       }
 
       async function loadProducts() {
