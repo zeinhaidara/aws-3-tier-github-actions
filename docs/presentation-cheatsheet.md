@@ -1,5 +1,81 @@
 # AWS 3-Tier Application Deployment
 
+.
+├── .github/workflows/
+│   ├── ci.yml                    # Tests, linting, security checks
+│   ├── cd.yml                    # Deployment workflow
+│   ├── infrastructure-bootstrap.yml
+│   ├── load-test.yml             # ApacheBench EC2/ALB load test
+│   └── publish-image.yml         # Builds/publishes Docker image
+│
+├── app/backend/
+│   ├── main.py                   # FastAPI application and API routes
+│   ├── Dockerfile                # Backend container image
+│   ├── requirements.txt          # Runtime dependencies
+│   ├── requirements-dev.txt      # Test/development dependencies
+│   ├── static/index.html         # Basic frontend/static page
+│   ├── tests/test_api.py         # API tests
+│   └── .env.example              # Example local environment variables
+│
+├── infra/terraform/
+│   ├── main.tf                   # Main AWS infrastructure composition
+│   ├── variables.tf              # Root Terraform variables
+│   ├── versions.tf               # Terraform/provider versions
+│   │
+│   ├── modules/
+│   │   ├── alb/                  # Application Load Balancer and target groups
+│   │   ├── networking/           # VPC, subnets, routing, NAT/IGW
+│   │   └── security-groups/      # ALB, EC2, RDS security groups
+│   │
+│   ├── bootstrap/                # Terraform state backend/bootstrap resources
+│   └── networking/               # Separate networking Terraform configuration
+│
+├── deploy/
+│   ├── ecs/
+│   │   ├── main.tf               # ECS/Fargate deployment
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── README.md
+│   │
+│   └── ec2/
+│       └── README.md             # EC2 deployment notes
+│
+├── docs/
+│   ├── diagram.png               # Architecture diagram
+│   └── presentation-cheatsheet.md
+│
+├── README.md                     # Project overview and setup
+├── .checkov.yaml                 # Checkov security-scan configuration
+├── .trivyignore                  # Trivy vulnerability exceptions
+└── sonar-project.properties      # SonarQube configuration
+
+SAST:
+  SonarQube
+
+DAST:
+  None currently
+
+IaC security:
+  Checkov
+
+Dependency/filesystem security:
+  Trivy filesystem
+
+Container security:
+  Trivy image scan
+
+Secret detection:
+  Trivy filesystem and image scans
+
+SBOM:
+  Anchore SBOM
+
+Functional testing:
+  Pytest
+
+Performance testing:
+  ApacheBench
+  
 ## Demo purpose
 
 This lab demonstrates an automated AWS deployment of a FastAPI/MySQL application using two compute models:
