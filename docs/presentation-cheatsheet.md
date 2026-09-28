@@ -125,7 +125,7 @@ The load generator is ApacheBench (`ab`), installed by `.github/workflows/load-t
 
 The workflow validates the HTTPS URL, records ASG capacity before the test, sends sustained traffic to the EC2 ALB, records ApacheBench results, captures scaling activity, and uploads the evidence as a GitHub Actions artifact.
 
-The default settings are 600 seconds and 50 concurrent clients. The EC2 target-tracking policy targets 60% average CPU, bounded by the environment’s `MIN_SIZE` and `MAX_SIZE` values.
+For this demonstration, the EC2 target-tracking policy targets 20% average CPU, bounded by the environment’s `MIN_SIZE` and `MAX_SIZE` values. Restore the production-style 60% target after the demo.
 
 ## Final evidence checklist
 
