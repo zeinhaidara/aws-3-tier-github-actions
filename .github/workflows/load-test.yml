@@ -45,7 +45,7 @@ jobs:
           set -euo pipefail
           [[ "$TARGET_URL" =~ ^https:// ]] || { echo "The target URL must use HTTPS." >&2; exit 1; }
           [[ "$DURATION_SECONDS" =~ ^[0-9]+$ ]] && (( DURATION_SECONDS >= 60 && DURATION_SECONDS <= 900 )) || { echo "Duration must be 60-900 seconds." >&2; exit 1; }
-          [[ "$CONCURRENCY" =~ ^[0-9]+$ ]] && (( CONCURRENCY >= 1 && CONCURRENCY <= 200 )) || { echo "Concurrency must be 1-200." >&2; exit 1; }
+          [[ "$CONCURRENCY" =~ ^[0-9]+$ ]] && (( CONCURRENCY >= 1 && CONCURRENCY <= 500 )) || { echo "Concurrency must be 1-500." >&2; exit 1; }
 
       - name: Configure AWS credentials with OIDC
         uses: aws-actions/configure-aws-credentials@v4
