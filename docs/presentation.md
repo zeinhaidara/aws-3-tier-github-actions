@@ -104,9 +104,59 @@ https://ecs-dev.cloudbatch818.click/healthz
 
 ## Six-minute presentation talk track
 
+### Business value and product
+
+“This project delivers a small FastAPI/MySQL product application, but the main engineering value is the delivery platform around it. The same tested release can run on EC2 or ECS across dev, test, and prod without manually configuring servers.”
+
+“That gives an engineering team repeatable infrastructure, traceability from code to deployment, a clear security boundary, and a practical choice between host-level control and managed container operations.”
+
+The application provides a static frontend, product API endpoints, `/healthz` for process health, and `/readyz` for database readiness.
+
+### Technology choices
+
+“The application is Python FastAPI packaged as a Docker image. Terraform defines AWS infrastructure, GitHub Actions provides CI/CD, RDS MySQL provides managed relational storage, ECR stores images, Secrets Manager protects credentials, and CloudWatch provides operational visibility.”
+
+The repository separates application code, Terraform infrastructure, ECS deployment assets, and GitHub Actions workflows.
+
+### Infrastructure and traffic flow
+
+“The infrastructure uses a three-tier network across two Availability Zones. Public subnets host the Application Load Balancer. Private application subnets host EC2 instances or ECS tasks. Private database subnets host RDS.”
+
+Show the architecture diagram here and walk across it from left to right:
+
+![Architecture diagram](diagram.png)
+
+Start at Route 53 and ACM, then follow the request to the public ALB. The ALB routes to either the EC2 Auto Scaling Group or the ECS Fargate service. Both application paths retrieve database credentials from Secrets Manager and connect to the private RDS MySQL database.
+
+```text
+Browser → Route 53 → ALB on 80/443 → FastAPI on 8000 → RDS MySQL on 3306
+```
+
+“The security groups enforce this flow. The ALB accepts public HTTP and HTTPS. The application tier accepts port 8000 only from the ALB. RDS accepts port 3306 only from the application tier. The browser never connects directly to the database.”
+
+Credentials are retrieved from Secrets Manager through IAM roles. NAT provides controlled outbound access for private resources when required.
+
+### EC2 and ECS deployment models
+
+“The same image is deployed two ways. EC2 gives host-level control: Terraform creates a launch template and Auto Scaling Group, user data installs Docker, and the instance pulls the image from ECR. ECS Fargate removes host management: ECS places tasks, maintains the desired count, replaces unhealthy tasks, and supports rollback through a deployment circuit breaker.”
+
+### CI/CD and release process
+
+“Feature branches go through pull-request validation into main. CI runs tests, linting, Terraform validation, Checkov, Trivy, Docker health checks, image scanning, SBOM generation, and SonarQube analysis.”
+
+“After CI succeeds on main, the exact tested image is published to ECR with an immutable `sha-<commit-sha>` tag. Deployment uses that image through Terraform. This prevents a moving `latest` tag from changing underneath a deployment and gives traceability back to the source commit.”
+
+### Observability and conclusion
+
+“CloudWatch collects application and database logs and monitors ALB 5xx errors, p95 latency, EC2 CPU, ECS CPU, and running task count. The load-test workflow lets me correlate traffic with latency, errors, CPU, and scaling activity.”
+
+“The result is a platform an engineering team can operate: repeatable infrastructure, controlled releases, private data access, immutable artifacts, two compute options, and enough telemetry to explain system behavior.”
+
+## Detailed reference talk track
+
 Use this as a spoken script. The timing is approximate; the headings are prompts, not slides that must be read word-for-word.
 
-### 0:00–0:45 — What the project is
+### Project overview
 
 “This project deploys the same FastAPI/MySQL application in two AWS compute models: EC2 with an Auto Scaling Group and ECS Fargate. The goal is to demonstrate a repeatable, secure deployment pipeline rather than manually configured servers.”
 
@@ -114,7 +164,7 @@ Traffic enters through Route 53 and an Application Load Balancer. The ALB routes
 
 The application has two useful endpoints: `/healthz` checks whether the process is alive, while `/readyz` checks database readiness.
 
-### 0:45–1:35 — Repository and infrastructure
+### Repository and infrastructure reference
 
 “The repository is organized into application code, Terraform infrastructure, deployment configurations, and GitHub Actions workflows.”
 
@@ -125,7 +175,7 @@ The application has two useful endpoints: `/healthz` checks whether the process 
 
 Terraform is environment-aware through `dev`, `test`, and `prod` variables. Remote state separates shared networking from environment-specific infrastructure.
 
-### 1:35–2:25 — CI/CD flow
+### CI/CD reference
 
 “A change first goes through quality and security checks before it can be deployed.”
 
@@ -135,7 +185,7 @@ After CI succeeds on `main`, the image is published to ECR with an immutable tag
 
 Infrastructure deployment is manually selected by target: networking, EC2, or ECS. The expected process is Terraform `plan`, review, and then `apply`.
 
-### 2:25–3:25 — EC2 and ECS comparison
+### EC2 and ECS reference
 
 “The project demonstrates two different operational models using the same image.”
 
@@ -145,7 +195,7 @@ For ECS, Terraform creates a Fargate task definition and service. ECS manages th
 
 The comparison is simple: EC2 provides more host-level control, while Fargate removes host-management work.
 
-### 3:25–4:15 — Security and data flow
+### Security and data-flow reference
 
 “The application is private behind the ALB and does not expose the database publicly.”
 
@@ -156,7 +206,7 @@ The comparison is simple: EC2 provides more host-level control, while Fargate re
 - GitHub Actions uses OIDC rather than long-lived AWS access keys.
 - RDS storage is encrypted, and the database exports operational logs to CloudWatch.
 
-### 4:15–5:25 — What CloudWatch does
+### CloudWatch reference
 
 “CloudWatch provides the operational view of the system: logs, infrastructure metrics, and alarms.”
 
@@ -179,7 +229,7 @@ The important alarms are:
 
 The EC2 Auto Scaling Group also uses target tracking based on average CPU. ECS Container Insights is enabled for additional ECS metrics. These alarms currently monitor conditions but have no SNS notification actions, so they do not automatically send email or Slack messages.
 
-### 5:25–6:00 — Demo and conclusion
+### Demo and conclusion reference
 
 “To demonstrate the system, I show the two HTTPS health endpoints, then open the CloudWatch log groups and alarms.”
 
