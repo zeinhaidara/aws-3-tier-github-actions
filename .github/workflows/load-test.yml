@@ -16,12 +16,12 @@ on:
       duration_seconds:
         description: Test duration in seconds
         required: false
-        default: "300"
+        default: "600"
         type: string
       concurrency:
         description: Concurrent clients
         required: false
-        default: "20"
+        default: "50"
         type: string
 
 permissions:
@@ -35,6 +35,18 @@ jobs:
     timeout-minutes: 20
     environment: ${{ inputs.environment }}
     steps:
+      - name: Validate load-test inputs
+        shell: bash
+        env:
+          TARGET_URL: ${{ inputs.url }}
+          DURATION_SECONDS: ${{ inputs.duration_seconds }}
+          CONCURRENCY: ${{ inputs.concurrency }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_URL" =~ ^https:// ]] || { echo "The target URL must use HTTPS." >&2; exit 1; }
+          [[ "$DURATION_SECONDS" =~ ^[0-9]+$ ]] && (( DURATION_SECONDS >= 60 && DURATION_SECONDS <= 900 )) || { echo "Duration must be 60-900 seconds." >&2; exit 1; }
+          [[ "$CONCURRENCY" =~ ^[0-9]+$ ]] && (( CONCURRENCY >= 1 && CONCURRENCY <= 200 )) || { echo "Concurrency must be 1-200." >&2; exit 1; }
+
       - name: Configure AWS credentials with OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -48,20 +60,36 @@ jobs:
         run: |
           aws autoscaling describe-auto-scaling-groups \
             --auto-scaling-group-names "cloudbatch818-zein-${{ inputs.environment }}-app-asg" \
-            --query 'AutoScalingGroups[0].{Min:MinSize,Desired:DesiredCapacity,Max:MaxSize,Instances:length(Instances)}'
+            --query 'AutoScalingGroups[0].{Min:MinSize,Desired:DesiredCapacity,Max:MaxSize,Instances:length(Instances)}' \
+            --output json | tee scaling-before.json
 
       - name: Run load test
         run: |
           set -euo pipefail
-          ab -t "${{ inputs.duration_seconds }}" -c "${{ inputs.concurrency }}" -k "${{ inputs.url }}"
+          ab -s 30 -t "${{ inputs.duration_seconds }}" -c "${{ inputs.concurrency }}" -k -g load-test.tsv "${{ inputs.url }}" | tee load-test.txt
 
       - name: Show scaling result
         if: always()
         run: |
           aws autoscaling describe-auto-scaling-groups \
             --auto-scaling-group-names "cloudbatch818-zein-${{ inputs.environment }}-app-asg" \
-            --query 'AutoScalingGroups[0].{Min:MinSize,Desired:DesiredCapacity,Max:MaxSize,Instances:length(Instances)}'
+            --query 'AutoScalingGroups[0].{Min:MinSize,Desired:DesiredCapacity,Max:MaxSize,Instances:length(Instances)}' \
+            --output json | tee scaling-after.json
           aws autoscaling describe-scaling-activities \
             --auto-scaling-group-name "cloudbatch818-zein-${{ inputs.environment }}-app-asg" \
             --max-items 5 \
-            --query 'Activities[].{Status:StatusCode,Cause:Cause,Start:StartTime}'
+            --query 'Activities[].{Status:StatusCode,Cause:Cause,Start:StartTime}' \
+            --output json | tee scaling-activities.json
+
+      - name: Upload load-test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ec2-load-test-${{ github.run_id }}
+          path: |
+            load-test.txt
+            load-test.tsv
+            scaling-before.json
+            scaling-after.json
+            scaling-activities.json
+          if-no-files-found: warn
