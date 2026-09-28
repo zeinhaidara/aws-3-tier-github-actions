@@ -46,7 +46,7 @@ CD automatically resolves the newest published immutable `sha-<commit>` image in
 - `CD - Infrastructure`: dynamically targets `networking`, `ec2`, or `ecs` and supports `plan`, `apply`, and `destroy`, followed by an HTTPS smoke test for application targets.
 - `Test - EC2 Load and Scaling`: send sustained traffic and report ASG capacity and recent scaling activity.
 
-For the scaling demo, set `MIN_SIZE=1` and `MAX_SIZE=2` in the `dev` GitHub Environment. Run the load test against a real application endpoint, such as `https://ec2-dev.example.com/api/products`, for several minutes.
+For the scaling demo, set `MIN_SIZE=1` and `MAX_SIZE=2` in the `dev` GitHub Environment. Run the load test against `https://ec2-dev.cloudbatch818.click/api/products`; its defaults are 10 minutes and 50 concurrent clients, with result and scaling evidence uploaded as an artifact.
 
 To remove the demo infrastructure safely, run `destroy` in reverse dependency order: target `ecs`, target `ec2`, then target `networking`. Keep the bootstrap state bucket until all other Terraform states have been destroyed.
 
