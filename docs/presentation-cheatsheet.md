@@ -102,98 +102,96 @@ https://ec2-dev.cloudbatch818.click/healthz
 https://ecs-dev.cloudbatch818.click/healthz
 ```
 
-## Demonstration narrative
+## Six-minute presentation talk track
 
-### 1. Infrastructure as Code
+Use this as a spoken script. The timing is approximate; the headings are prompts, not slides that must be read word-for-word.
 
-Terraform provisions the VPC, public and private subnets, NAT gateway, route tables, security groups, ECR repository, remote state bucket, RDS, Application Load Balancers, ACM certificates, Route 53 records, EC2/ASG resources, ECS/Fargate resources, CloudWatch logs, alarms, and scaling policies.
+### 0:00–0:45 — What the project is
 
-The infrastructure is repeatable and environment-aware through variables for `dev`, `test`, and `prod`.
+“This project deploys the same FastAPI/MySQL application in two AWS compute models: EC2 with an Auto Scaling Group and ECS Fargate. The goal is to demonstrate a repeatable, secure deployment pipeline rather than manually configured servers.”
 
-### 2. CI quality and security
+Traffic enters through Route 53 and an Application Load Balancer. The ALB routes requests to either the EC2 container or the ECS service. Both application paths connect to one private RDS MySQL database.
 
-The `CI - Quality and Security` workflow runs on pull requests and pushes to `main`.
+The application has two useful endpoints: `/healthz` checks whether the process is alive, while `/readyz` checks database readiness.
 
-Its stages are:
+### 0:45–1:35 — Repository and infrastructure
 
-1. Ruff linting and pytest coverage.
-2. Terraform formatting and validation.
-3. Checkov infrastructure security scanning.
-4. Trivy filesystem vulnerability, misconfiguration, and secret scanning.
-5. Docker image build and `/healthz` container smoke test.
-6. Trivy image scanning and SBOM generation.
-7. SonarQube analysis using the coverage artifact.
+“The repository is organized into application code, Terraform infrastructure, deployment configurations, and GitHub Actions workflows.”
 
-The image is not published until the tested and scanned build succeeds.
+- `app/backend`: FastAPI application, Dockerfile, dependencies, and tests.
+- `infra/terraform`: shared environment infrastructure such as VPC-related resources, ALB, security groups, RDS, EC2, alarms, and logging.
+- `deploy/ecs`: ECS-specific Fargate cluster, task definition, service, logs, and alarms.
+- `.github/workflows`: CI, image publication, infrastructure deployment, and load testing.
 
-### 3. Image publication
+Terraform is environment-aware through `dev`, `test`, and `prod` variables. Remote state separates shared networking from environment-specific infrastructure.
 
-`Publish - Application Image` runs after successful CI on `main`. It downloads the exact image artifact produced by CI and publishes it to ECR with an immutable tag:
+### 1:35–2:25 — CI/CD flow
+
+“A change first goes through quality and security checks before it can be deployed.”
+
+The CI workflow runs linting, pytest, Terraform validation, Checkov, Trivy filesystem and secret scans, a Docker build, a container health check, an image scan, SBOM generation, and SonarQube analysis.
+
+After CI succeeds on `main`, the image is published to ECR with an immutable tag such as `sha-<commit-sha>`. This gives traceability from the source commit to the tested image and the deployed version.
+
+Infrastructure deployment is manually selected by target: networking, EC2, or ECS. The expected process is Terraform `plan`, review, and then `apply`.
+
+### 2:25–3:25 — EC2 and ECS comparison
+
+“The project demonstrates two different operational models using the same image.”
+
+For EC2, Terraform creates a launch template and Auto Scaling Group. User data installs Docker, logs in to ECR, pulls the immutable image, and starts the container. The ALB performs health checks, and the Auto Scaling Group replaces instances that fail ELB health checks.
+
+For ECS, Terraform creates a Fargate task definition and service. ECS manages the host operating system and task placement. The service maintains the desired task count, replaces unhealthy tasks, and uses a deployment circuit breaker with rollback for failed deployments.
+
+The comparison is simple: EC2 provides more host-level control, while Fargate removes host-management work.
+
+### 3:25–4:15 — Security and data flow
+
+“The application is private behind the ALB and does not expose the database publicly.”
+
+- Public traffic reaches the ALB; application instances and ECS tasks run in private application subnets.
+- RDS runs in private database subnets and accepts MySQL traffic only from the application security group.
+- Database credentials are managed by Secrets Manager.
+- EC2 and ECS use IAM roles to retrieve the secret and pull the image from ECR.
+- GitHub Actions uses OIDC rather than long-lived AWS access keys.
+- RDS storage is encrypted, and the database exports operational logs to CloudWatch.
+
+### 4:15–5:25 — What CloudWatch does
+
+“CloudWatch provides the operational view of the system: logs, infrastructure metrics, and alarms.”
+
+Application logs are sent to:
 
 ```text
-sha-<commit-sha>
+/cloudbatch818/zein/<environment>/app   # EC2
+/cloudbatch818/zein/<environment>/ecs   # ECS
 ```
 
-This connects the source commit, tested image, and deployed application.
+Both log groups retain logs for seven days. RDS exports `error`, `general`, and `slowquery` logs.
 
-### 4. Infrastructure deployment
+The important alarms are:
 
-`CD - Infrastructure` is manually dispatched with a target and operation:
+- `alb-5xx`: detects repeated application or target errors.
+- `alb-latency`: detects p95 target response time above one second.
+- `app-cpu-high`: detects high average EC2 Auto Scaling Group CPU.
+- `ecs-service-cpu-high`: detects high ECS service CPU.
+- `ecs-running-tasks-low`: detects when ECS has fewer running tasks than desired.
 
-- `networking`: shared VPC and networking state.
-- `ec2`: RDS, ALB, ACM/Route 53, launch template, ASG, and EC2 host.
-- `ecs`: ECS cluster, Fargate task definition, service, ALB, and logs.
+The EC2 Auto Scaling Group also uses target tracking based on average CPU. ECS Container Insights is enabled for additional ECS metrics. These alarms currently monitor conditions but have no SNS notification actions, so they do not automatically send email or Slack messages.
 
-The normal sequence is `plan`, review, then `apply`. Destruction is performed in reverse dependency order: ECS, EC2, then networking.
+### 5:25–6:00 — Demo and conclusion
 
-### 5. EC2 deployment model
+“To demonstrate the system, I show the two HTTPS health endpoints, then open the CloudWatch log groups and alarms.”
 
-Terraform creates a launch template and Auto Scaling Group. EC2 user data installs Docker, authenticates to ECR, pulls the immutable application image, and starts the container.
+The load-test workflow sends traffic to the EC2 ALB and captures ApacheBench results and scaling activity. During the test, I can correlate traffic with CPU, ALB latency, 5xx responses, and Auto Scaling behavior.
 
-The ALB checks `/healthz`. The ASG uses ELB health checks and replaces instances that fail the load balancer health check.
+“The main result is a repeatable deployment with two compute options, private database connectivity, automated security checks, immutable application artifacts, and CloudWatch visibility into both application behavior and infrastructure health.”
 
-### 6. ECS deployment model
-
-Terraform creates an ECS Fargate task definition containing the image URI, port mapping, environment variables, logging configuration, and container health check.
-
-The ECS service maintains the desired task count, replaces unhealthy tasks, connects tasks to the ALB target group, and uses a deployment circuit breaker for failed rollouts.
-
-ECS is operationally simpler because AWS manages the host operating system, Docker runtime, task placement, and task replacement.
-
-### 7. Database and security flow
-
-The application in both EC2 and ECS connects to the same private RDS MySQL instance.
-
-- Credentials are stored in Secrets Manager.
-- The EC2 instance role or ECS task role retrieves the secret.
-- The database security group allows MySQL traffic only from the application security group.
-- Internet traffic enters through the ALB, not directly to the application.
-- GitHub Actions uses OIDC instead of long-lived AWS access keys.
-
-## CloudWatch demonstration
+## Optional CloudWatch console notes
 
 Focus on alarms beginning with `cloudbatch818-zein-dev-`. Older names such as `chikwex-*` and `aws-3tier-*` belong to previous deployments.
 
-Important signals:
-
-- `ec2-cpu-high`: EC2 CPU saturation.
-- `app-cpu-high`: ASG application CPU.
-- `alb-latency`: ALB target response time.
-- `alb-5xx`: target or application errors.
-- `unhealthy-targets`: failed ALB health checks.
-- `TargetTracking-...app-asg...`: ASG target tracking and capacity decisions.
-- `ecs-service-cpu-high`: ECS service CPU utilization.
-- `ecs-running-tasks-low`: ECS task availability.
-- `ecs-unhealthy-targets`: ECS target health.
-
-Relevant log groups:
-
-```text
-/cloudbatch818/zein/dev/app
-/cloudbatch818/zein/dev/ecs
-```
-
-`OK` means the metric is below the alarm threshold. `In alarm` means the condition is currently true. An alarm with no actions provides monitoring but does not send notifications. A target-tracking alarm may enter an alarm state as part of scale-out or scale-in behavior.
+In the console, `OK` means the metric is below the alarm threshold. `In alarm` means the condition is currently true. These Terraform alarms have no actions, so they provide monitoring but do not send notifications. Target-tracking alarms may change state as part of scaling decisions.
 
 ## Load and scaling demonstration
 
