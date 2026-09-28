@@ -25,11 +25,16 @@ The application serves a small static frontend and API from FastAPI. `/healthz` 
 ## Repository layout
 
 ```text
-app/backend/                         FastAPI application, Dockerfile, tests
-infra/terraform/                    Shared VPC, ALB, RDS, EC2, IAM, alarms
-deploy/ecs/                          ECS cluster, Fargate task, service, logs, alarms
-.github/workflows/                  CI, image publication, deployment, load testing
-docs/                                Architecture and presentation material
+.
+|-- app/backend/             FastAPI application, Dockerfile, tests
+|-- infra/terraform/         Shared VPC, ALB, RDS, EC2, IAM, alarms
+|   |-- modules/alb/         Load balancer and target group
+|   |-- modules/networking/  VPC, subnets, routes, NAT
+|   `-- modules/security-groups/
+|-- deploy/ecs/              ECS cluster, Fargate task, service, logs, alarms
+|-- .github/workflows/       CI, image publication, deployment, load testing
+|-- docs/                    Architecture and presentation material
+`-- README.md                Project documentation
 ```
 
 ## Branches and environments

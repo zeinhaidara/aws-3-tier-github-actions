@@ -1,5 +1,29 @@
 # AWS 3-Tier Application Deployment
 
+## Presentation introduction
+
+“This project demonstrates how to take a small FastAPI/MySQL product from source code to a repeatable AWS deployment. The business goal is reliable delivery: every release is tested, security-scanned, traceable to a commit, and deployable across multiple environments.”
+
+“The platform supports both EC2 and ECS Fargate, allowing an engineering team to compare host-level control with managed container operations. The application is private behind an ALB, the database is isolated, and CloudWatch provides the operational evidence needed to understand system health.”
+
+Start with this business outcome, then use the architecture diagram to explain the technology and traffic flow.
+
+## GitHub-safe repository structure
+
+```text
+.
+|-- .github/workflows/       CI, image publication, deployment, load test
+|-- app/backend/             FastAPI application, Dockerfile, tests
+|-- infra/terraform/         VPC, ALB, RDS, EC2, IAM, alarms
+|   |-- modules/alb/         Load balancer and target group
+|   |-- modules/networking/  VPC, subnets, routes, NAT
+|   `-- modules/security-groups/
+|-- deploy/ecs/              ECS/Fargate deployment
+|-- docs/                    Architecture and presentation material
+|-- README.md                Project documentation
+`-- sonar-project.properties Quality analysis configuration
+```
+
 .
 ├── .github/workflows/
 │   ├── ci.yml                    # Tests, linting, security checks
