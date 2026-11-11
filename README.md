@@ -2,7 +2,24 @@
 
 This repository demonstrates a repeatable AWS deployment for a FastAPI/MySQL application using EC2 Auto Scaling and ECS Fargate. Both deployments use the same tested Docker image behind an Application Load Balancer.
 
+**Status: cloud environment torn down. Validation level: run on real cloud in a training account.** Historical publish and infrastructure-deploy failures remain visible because the environment is unavailable; they are not evidence of a currently running service. This PR runs offline CI, not a cloud rebuild.
+
 ## Architecture
+
+```mermaid
+flowchart LR
+    Browser --> DNS[Route 53] --> ALB[ALB with ACM TLS]
+    ALB --> EC2[EC2 Auto Scaling: FastAPI container]
+    ALB --> ECS[ECS Fargate: same application image]
+    EC2 --> RDS[Private RDS MySQL]
+    ECS --> RDS
+    SM[Secrets Manager] --> EC2
+    SM --> ECS
+    CI[Tests and scan gates] --> ECR[Immutable ECR image]
+    ECR --> EC2
+    ECR --> ECS
+```
+
 
 ![AWS 3-tier deployment architecture](docs/diagram.png)
 
@@ -131,7 +148,26 @@ Before production use:
 - Review RDS backup retention, deletion protection, Multi-AZ, and final-snapshot settings.
 - Review NAT Gateway cost and high-availability requirements.
 - Add authentication, authorization, rate limiting, WAF rules, dashboards, and alert escalation if externally exposed.
-- Pin third-party GitHub Actions to reviewed commit SHAs where required.
 - Add environment approvals and least-privilege production IAM policies.
 
 These are intentional demo-scope trade-offs and should be part of a production hardening plan.
+
+## Run and test locally
+
+The backend defaults to a local SQLite database; this does not prove RDS, Secrets Manager or IAM integration.
+
+```sh
+cd app/backend
+python -m venv .venv
+# Activate the virtual environment for your shell, then:
+pip install -r requirements-dev.txt ruff
+SEED_DATA=true uvicorn main:app --reload
+pytest --cov=. -q
+ruff check .
+```
+
+See [backend setup](app/backend/README.md). CI also validates Terraform and builds/scans the container. No cloud credentials are needed for the unit-test path.
+
+## Validation boundaries and trade-offs
+
+One immutable image supports both EC2 and ECS so delivery behavior can be compared without changing the application. OIDC avoids stored AWS deployment keys. The ALB HTTP listener redirects to HTTPS; security groups retain broad outbound access for demo operation. These are explicit configuration choices, not a claim of a fully restricted production perimeter. CloudWatch alarms have no notification actions. Production work remains listed above.

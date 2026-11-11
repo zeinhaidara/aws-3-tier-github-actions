@@ -15,8 +15,8 @@ jobs:
     name: Application tests and lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: pip
@@ -31,7 +31,7 @@ jobs:
         working-directory: app/backend
         run: PYTHONPATH=. pytest --cov=. --cov-report=xml:coverage.xml -q
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: python-coverage
           path: app/backend/coverage.xml
@@ -41,8 +41,8 @@ jobs:
     name: Terraform format and validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
       - name: Check formatting
         run: terraform fmt -check -recursive
       - name: Validate configurations
@@ -58,15 +58,15 @@ jobs:
     name: Checkov IaC scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Scan shared and EC2 infrastructure
-        uses: bridgecrewio/checkov-action@v12
+        uses: bridgecrewio/checkov-action@a32f8b5c5c7c958bc38947c65dfe139debaf0607 # v12
         with:
           directory: infra/terraform
           framework: terraform
           soft_fail: false
       - name: Scan ECS infrastructure
-        uses: bridgecrewio/checkov-action@v12
+        uses: bridgecrewio/checkov-action@a32f8b5c5c7c958bc38947c65dfe139debaf0607 # v12
         with:
           directory: deploy/ecs
           framework: terraform
@@ -76,8 +76,8 @@ jobs:
     name: Trivy filesystem scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: aquasecurity/trivy-action@0.35.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
           scan-type: fs
           scan-ref: .
@@ -90,7 +90,7 @@ jobs:
     name: Build, test, and scan image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Build image
         run: docker build -t cloudbatch818-api:ci-${{ github.sha }} app/backend
       - name: Verify container health endpoint
@@ -107,7 +107,7 @@ jobs:
           done
           exit 1
       - name: Scan image
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
           image-ref: cloudbatch818-api:ci-${{ github.sha }}
           scanners: vuln,secret
@@ -115,13 +115,13 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
       - name: Generate SBOM
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
           image: cloudbatch818-api:ci-${{ github.sha }}
           format: spdx-json
           output-file: sbom.spdx.json
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: image-sbom
           path: sbom.spdx.json
@@ -129,7 +129,7 @@ jobs:
       - name: Export tested image
         run: docker save --output application-image.tar cloudbatch818-api:ci-${{ github.sha }}
       - name: Upload tested image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: application-image-${{ github.sha }}
           path: application-image.tar
@@ -145,11 +145,11 @@ jobs:
       SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Download coverage report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: python-coverage
           path: app/backend
