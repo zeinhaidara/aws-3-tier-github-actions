@@ -15,7 +15,9 @@ jobs:
     name: Publish tested immutable image
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Off unless the repository variable PUBLISH_IMAGE is 'true': the AWS account behind ECR is torn down.
     if: >-
+      vars.PUBLISH_IMAGE == 'true' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&

@@ -68,7 +68,9 @@ The project uses a branch-based, multi-environment CI/CD model:
 
 `CI - Quality and Security` runs linting, pytest coverage, Terraform validation, Checkov, Trivy filesystem and secret scans, Docker health testing, image scanning, SBOM generation, and SonarQube analysis.
 
-After successful CI on `main`, `Publish - Application Image` publishes the exact tested image to ECR as:
+Publishing is **off by default** because the AWS account is torn down: the publish job is skipped unless the repository variable `PUBLISH_IMAGE` is set to `true` (Settings → Secrets and variables → Actions → Variables). It also needs the existing variables `AWS_ROLE_TO_ASSUME` and `AWS_REGION` (and optionally `ECR_REPOSITORY_NAME`) pointing at a live account.
+
+When enabled, after successful CI on `main`, `Publish - Application Image` publishes the exact tested image to ECR as:
 
 ```text
 sha-<commit-sha>
